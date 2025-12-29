@@ -32,7 +32,9 @@ const isFingerUp = (landmarks: NormalizedLandmark[], tip: number, base: number) 
 const getFingerCount = (landmarks: NormalizedLandmark[]) =>
   fingerTips.reduce((count, tip) => count + (isFingerUp(landmarks, tip, tip - 2) ? 1 : 0), 0)
 
-const getHandState = (landmarks: NormalizedLandmark[]) => {
+const getHandState = (landmarks: NormalizedLandmark[], fingerCount: number) => {
+  if (fingerCount >= 3) return 'open'
+  if (fingerCount <= 1) return 'fist'
   const palmWidth = distance(landmarks?.[5], landmarks?.[17]) || 1
   const avgTipCurl =
     fingerTips.reduce((sum, tip) => sum + distance(landmarks?.[tip], landmarks?.[tip - 2]), 0) / fingerTips.length
@@ -80,9 +82,10 @@ export async function startHandTracking(
 
     results.multiHandLandmarks?.forEach((landmarks, index) => {
       const label = results.multiHandedness?.[index]?.label
+      const fingerCount = getFingerCount(landmarks)
       const info: HandInfo = {
-        fingerCount: getFingerCount(landmarks),
-        state: getHandState(landmarks),
+        fingerCount,
+        state: getHandState(landmarks, fingerCount),
         center: getCenter(landmarks),
       }
 
