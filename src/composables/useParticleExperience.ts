@@ -3,7 +3,7 @@ import { textToPositions } from '@/utils/textToPositions'
 
 const gestureTextMap: Record<number, string> = {
   1: 'hello',
-  2: '北航',
+  2: '小米',
   3: 'I Love You',
 }
 

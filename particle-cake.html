@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2026 粒子蛋糕互动体验</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #000;
+      color: #ffd700;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      background: #000; /* 确保背景是黑色 */
+    }
+
+    #ui-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .ui-element {
+      pointer-events: auto;
+    }
+
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      transition: opacity 0.5s;
+    }
+
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+      display: none; /* 完全隐藏，不占用空间 */
+    }
+
+    #loading-progress {
+      width: 300px;
+      height: 4px;
+      background: rgba(255, 215, 0, 0.2);
+      border-radius: 2px;
+      margin-top: 20px;
+      overflow: hidden;
+    }
+
+    #loading-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #ffd700, #ffed4e);
+      width: 0%;
+      transition: width 0.3s;
+      box-shadow: 0 0 20px #ffd700;
+    }
+
+    #loading-text {
+      margin-top: 15px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    #upload-btn {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      background: rgba(255, 215, 0, 0.1);
+      border: 1px solid rgba(255, 215, 0, 0.5);
+      border-radius: 8px;
+      color: #ffd700;
+      font-size: 14px;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s;
+      z-index: 20;
+    }
+
+    #upload-btn:hover {
+      background: rgba(255, 215, 0, 0.2);
+      border-color: #ffd700;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+    }
+
+    #upload-btn.hidden {
+      display: none;
+    }
+
+    #start-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex; /* 默认显示 */
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      backdrop-filter: blur(10px);
+    }
+
+    #start-screen.hidden {
+      display: none;
+    }
+
+    #start-btn {
+      padding: 18px 48px;
+      background: rgba(255, 215, 0, 0.15);
+      border: 2px solid rgba(255, 215, 0, 0.6);
+      border-radius: 12px;
+      color: #ffd700;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s;
+      margin-bottom: 20px;
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #start-btn:hover {
+      background: rgba(255, 215, 0, 0.25);
+      border-color: #ffd700;
+      box-shadow: 0 0 40px rgba(255, 215, 0, 0.6);
+      transform: scale(1.05);
+    }
+
+    #start-btn:active {
+      transform: scale(0.98);
+    }
+
+    .star-icon {
+      font-size: 18px;
+    }
+
+    #start-upload-btn {
+      padding: 12px 32px;
+      background: rgba(255, 215, 0, 0.1);
+      border: 1px solid rgba(255, 215, 0, 0.5);
+      border-radius: 8px;
+      color: #ffd700;
+      font-size: 16px;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s;
+    }
+
+    #start-upload-btn:hover {
+      background: rgba(255, 215, 0, 0.2);
+      border-color: #ffd700;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+    }
+
+    #camera-preview {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      width: 200px;
+      height: 150px;
+      border: 2px solid rgba(255, 215, 0, 0.5);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+      z-index: 20;
+      backdrop-filter: blur(10px);
+    }
+
+    #camera-preview.hidden {
+      display: none;
+    }
+
+    #camera-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    #camera-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    #status-text {
+      position: fixed;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 10px 20px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      z-index: 20;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    #status-text.visible {
+      opacity: 1;
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    .glow-text {
+      text-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700, 0 0 30px #ffd700;
+    }
+  </style>
+</head>
+<body>
+  <div id="start-screen">
+    <button id="start-btn" class="ui-element">
+      <span>开启 2026</span>
+      <span class="star-icon">⭐</span>
+    </button>
+    <button id="start-upload-btn" class="ui-element">上传照片</button>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <div id="ui-overlay">
+    <div id="status-text"></div>
+    <button id="upload-btn" class="ui-element hidden">上传照片</button>
+    <div id="camera-preview" class="ui-element hidden">
+      <video id="camera-video" autoplay playsinline></video>
+      <canvas id="camera-canvas"></canvas>
+    </div>
+  </div>
+
+  <input type="file" id="file-input" accept="image/*" />
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "@mediapipe/hands": "https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js",
+        "@mediapipe/camera_utils": "https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js",
+        "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.esm.js"
+      }
+    }
+  </script>
+
+  <script type="module">
+    // 模块导入
+    import * as THREE from 'three';
+    import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+    
+    // 可选模块（可能加载失败）
+    let Hands = null;
+    let Camera = null;
+    let gsap = null;
+    let modulesLoadingPromise = null;
+    
+    // 异步加载可选模块
+    modulesLoadingPromise = Promise.allSettled([
+      import('@mediapipe/hands').then(m => { Hands = m.Hands; console.log('MediaPipe Hands 加载成功'); }).catch(e => console.warn('MediaPipe Hands 加载失败:', e)),
+      import('@mediapipe/camera_utils').then(m => { Camera = m.Camera; console.log('MediaPipe Camera 加载成功'); }).catch(e => console.warn('MediaPipe Camera 加载失败:', e)),
+      import('gsap').then(m => { 
+        // GSAP 可能是默认导出或命名导出
+        gsap = m.gsap || m.default || m;
+        console.log('GSAP 加载成功', gsap ? '对象存在' : '对象不存在');
+      }).catch(e => {
+        console.warn('GSAP 加载失败:', e);
+        gsap = null;
+      })
+    ]).then(() => {
+      console.log('所有可选模块加载尝试完成');
+      console.log('GSAP 状态:', gsap && typeof gsap.to === 'function' ? '已加载且可用' : '未加载或不可用');
+      console.log('MediaPipe 状态:', Hands && Camera ? '已加载' : '未加载');
+    });
+
+    // ==================== 全局变量 ====================
+    let scene, camera, renderer, composer;
+    let particleSystem, instancedMesh;
+    let handTracker, cameraVideo, cameraCanvas, cameraCtx;
+    let currentPhase = 'intro'; // intro, fireworks, main
+    let particleCount = 20000; // 减少粒子数量以提高性能和可见性
+    let positions, velocities, targets;
+    let userPhotos = [];
+    let sceneRotation = { x: 0, y: 0 };
+    let handState = null;
+    let handCenter = null;
+    let lastGestureTime = 0;
+    const gestureCooldown = 500; // 500ms防抖
+
+    // ==================== 工具函数 ====================
+    // 移除updateLoading函数，不再需要加载进度显示
+
+    function showStatus(text, duration = 2000) {
+      const statusEl = document.getElementById('status-text');
+      statusEl.textContent = text;
+      statusEl.classList.add('visible');
+      setTimeout(() => {
+        statusEl.classList.remove('visible');
+      }, duration);
+    }
+
+    function textToPositions(text, fontSize = 200, scaleMultiplier = 1.0) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      // 增大画布以获得更好的采样质量
+      canvas.width = 2048;
+      canvas.height = 512;
+
+      // 清除画布
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+      const positions = [];
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+      // 使用更精确的采样，确保数字清晰
+      const step = 2; // 减小步长，获得更多采样点
+      for (let y = 0; y < canvas.height; y += step) {
+        for (let x = 0; x < canvas.width; x += step) {
+          const alpha = data[(y * canvas.width + x) * 4 + 3];
+          if (alpha > 100) { // 降低阈值，获取更多像素点
+            // 缩放因子，应用倍数调整
+            const baseScale = 0.75;
+            const scale = baseScale * scaleMultiplier;
+            positions.push((x - canvas.width / 2) * scale);
+            positions.push((canvas.height / 2 - y) * scale);
+            // Z轴几乎为0，让数字扁平清晰
+            positions.push(0); // Z轴设为0，完全扁平
+          }
+        }
+      }
+
+      console.log(`文本 "${text}" 提取了 ${positions.length / 3} 个粒子位置，缩放倍数: ${scaleMultiplier}`);
+      return new Float32Array(positions);
+    }
+
+    // ==================== 初始化场景 ====================
+    function initScene() {
+      try {
+        // 初始化Three.js场景
+
+        const container = document.getElementById('canvas-container');
+        if (!container) {
+          throw new Error('找不到 canvas-container 元素');
+        }
+        
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        camera = new THREE.PerspectiveCamera(
+          55,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          2000
+        );
+        camera.position.set(0, 0, 600); // 稍微拉远以便看到更多内容
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+        
+        console.log('Three.js 场景初始化完成');
+      } catch (error) {
+        console.error('场景初始化错误:', error);
+        throw error;
+      }
+
+      // Post-processing
+      try {
+        composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new UnrealBloomPass(
+          new THREE.Vector2(window.innerWidth, window.innerHeight),
+          1.5, // strength
+          0.4, // radius
+          0.85 // threshold
+        );
+        composer.addPass(bloomPass);
+        console.log('后处理效果初始化完成');
+      } catch (error) {
+        console.warn('后处理效果初始化失败，将使用基础渲染:', error);
+        composer = null; // 不使用后处理
+      }
+
+      // 创建粒子系统
+      initParticles();
+
+      // 初始化后处理效果
+      initPostProcessing();
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function initParticles() {
+      console.log('初始化粒子系统，粒子数量:', particleCount);
+      positions = new Float32Array(particleCount * 3);
+      velocities = new Float32Array(particleCount * 3);
+      targets = new Float32Array(particleCount * 3);
+
+      // 初始化随机位置（分散的初始位置，等待第一个数字）
+      for (let i = 0; i < particleCount; i++) {
+        const idx = i * 3;
+        // 让粒子初始位置更分散，形成星云效果
+        const radius = 500 + Math.random() * 300;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(Math.random() * 2 - 1);
+        
+        positions[idx] = radius * Math.sin(phi) * Math.cos(theta);
+        positions[idx + 1] = radius * Math.cos(phi);
+        positions[idx + 2] = radius * Math.sin(phi) * Math.sin(theta);
+
+        // 初始目标也是当前位置
+        targets[idx] = positions[idx];
+        targets[idx + 1] = positions[idx + 1];
+        targets[idx + 2] = positions[idx + 2];
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+      const material = new THREE.PointsMaterial({
+        size: 2, // 减小粒子大小，避免重叠，确保数字清晰
+        color: 0xffd700,
+        transparent: true,
+        opacity: 1.0, // 提高不透明度
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        sizeAttenuation: true, // 启用距离衰减
+      });
+
+      particleSystem = new THREE.Points(geometry, material);
+      scene.add(particleSystem);
+      console.log('粒子系统已添加到场景，粒子数:', particleSystem.geometry.attributes.position.count / 3);
+    }
+
+    function initPostProcessing() {
+      // 添加环境光
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+      scene.add(ambientLight);
+
+      // 添加点光源
+      const pointLight = new THREE.PointLight(0xffd700, 2, 1000);
+      pointLight.position.set(0, 0, 500);
+      scene.add(pointLight);
+    }
+
+    // ==================== 倒计时序列 ====================
+    async function startIntroSequence() {
+      console.log('开始倒计时序列');
+      currentPhase = 'intro';
+      
+      // 确保粒子系统已创建
+      if (!particleSystem) {
+        console.error('粒子系统未创建！');
+        return;
+      }
+      
+      // 立即隐藏或半透明加载屏幕，让用户看到粒子
+      const loadingScreen = document.getElementById('loading-screen');
+      if (loadingScreen) {
+        // 先让加载屏幕半透明，然后完全隐藏
+        loadingScreen.style.transition = 'opacity 1s ease-out';
+        loadingScreen.style.opacity = '0.3'; // 半透明，仍能看到加载信息但不会完全遮挡
+        
+        // 延迟完全隐藏，给用户一点时间看到过渡
+        setTimeout(() => {
+          loadingScreen.classList.add('hidden');
+          console.log('加载屏幕已隐藏');
+        }, 1500);
+      }
+      
+      // 先让粒子显示一下，形成初始星云
+      console.log('显示初始粒子云...');
+      scatterParticles(); // 初始散开状态
+      await new Promise(resolve => setTimeout(resolve, 500)); // 缩短初始等待时间
+      
+      const countdown = ['5', '4', '3', '2', '1', '2026'];
+      const gatherDuration =900; // 聚集时间（缩短）
+      const holdDuration = 550; // 保持数字的时间（缩短）
+      const scatterDuration = 0; // 散开时间（设为0，直接切换）
+
+      for (let i = 0; i < countdown.length; i++) {
+        const text = countdown[i];
+        console.log(`显示倒计时: ${text}`);
+        // 倒计时: ${text}
+
+        // 步骤1: 粒子从散开状态聚集到数字
+        console.log(`步骤1: 粒子聚集形成 "${text}"`);
+        const fontSize = text === '2026' ? 220 : 240; // 字体大小
+        const textPositions = textToPositions(text, fontSize, text === '2026' ? 2.0 : 1.5); // 2026是2倍，其他是1.5倍
+        console.log(`文本 "${text}" 生成 ${textPositions.length / 3} 个粒子位置`);
+        
+        // 重新定位粒子到新数字
+        retargetParticles(textPositions);
+        
+        // 给粒子足够的时间平滑流动到新位置并形成数字
+        await new Promise(resolve => setTimeout(resolve, gatherDuration));
+        
+        // 步骤2: 数字形成后，保持一段时间让用户看清
+        console.log(`步骤2: 保持数字 "${text}"`);
+        await new Promise(resolve => setTimeout(resolve, holdDuration));
+        
+        // 步骤3: 如果不是最后一个数字，让粒子散开（但时间设为0，直接切换）
+        if (i < countdown.length - 1) {
+          console.log(`步骤3: 准备下一个数字`);
+          scatterParticles();
+          if (scatterDuration > 0) {
+            await new Promise(resolve => setTimeout(resolve, scatterDuration));
+          }
+        }
+      }
+
+      // Warp Speed 效果
+      await warpSpeedEffect();
+
+      // 烟花过场
+      await fireworksTransition();
+    }
+
+    function scatterParticles() {
+      // 让粒子散开成星云状态
+      console.log('粒子散开...');
+      for (let i = 0; i < particleCount; i++) {
+        const idx = i * 3;
+        // 随机球面分布
+        const radius = 400 + Math.random() * 300;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(Math.random() * 2 - 1);
+        
+        targets[idx] = radius * Math.sin(phi) * Math.cos(theta);
+        targets[idx + 1] = radius * Math.cos(phi);
+        targets[idx + 2] = radius * Math.sin(phi) * Math.sin(theta);
+      }
+    }
+
+    function retargetParticles(newTargets) {
+      const targetCount = newTargets.length / 3;
+      console.log(`重新定位粒子: 目标位置数=${targetCount}, 粒子数=${particleCount}`);
+      
+      if (targetCount === 0) {
+        console.warn('目标位置为空！');
+        return;
+      }
+      
+      // 关键修复：只使用文本提取到的精确位置，不重复使用
+      // 剩余的粒子作为背景散开
+      const textParticleCount = Math.min(targetCount, particleCount);
+      const backgroundParticleCount = particleCount - textParticleCount;
+      
+      // 使用目标位置形成数字（只使用精确位置，不重复）
+      if (targetCount >= particleCount) {
+        // 目标位置足够，均匀采样
+        const step = targetCount / particleCount;
+        for (let i = 0; i < particleCount; i++) {
+          const srcIdx = Math.floor(i * step) * 3;
+          const dst = i * 3;
+          // 直接使用目标位置，不添加任何偏移
+          targets[dst] = newTargets[srcIdx] || 0;
+          targets[dst + 1] = newTargets[srcIdx + 1] || 0;
+          targets[dst + 2] = newTargets[srcIdx + 2] || 0;
+        }
+      } else {
+        // 目标位置少于粒子数：只使用目标位置形成数字，多余的作为背景
+        // 首先，使用所有目标位置形成数字
+        for (let i = 0; i < targetCount; i++) {
+          const srcIdx = i * 3;
+          const dst = i * 3;
+          // 使用精确的目标位置，不添加任何偏移
+          targets[dst] = newTargets[srcIdx] || 0;
+          targets[dst + 1] = newTargets[srcIdx + 1] || 0;
+          targets[dst + 2] = newTargets[srcIdx + 2] || 0;
+        }
+        
+        // 剩余的粒子保持散开状态作为背景（星空效果）
+        for (let i = targetCount; i < particleCount; i++) {
+          const dst = i * 3;
+          // 随机分布在数字周围，形成星空背景
+          const radius = 350 + Math.random() * 450; // 距离数字较远，避免干扰
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(Math.random() * 2 - 1);
+          
+          targets[dst] = radius * Math.sin(phi) * Math.cos(theta);
+          targets[dst + 1] = radius * Math.cos(phi);
+          targets[dst + 2] = radius * Math.sin(phi) * Math.sin(theta);
+        }
+      }
+      
+      console.log(`粒子重新定位完成: ${textParticleCount} 个形成数字, ${backgroundParticleCount} 个作为背景`);
+    }
+
+    async function warpSpeedEffect() {
+      return new Promise(resolve => {
+        try {
+          console.log('开始 Warp Speed 效果');
+          const startZ = camera.position.z;
+          const targetZ = 100; // 摄像机向前冲刺的目标位置
+          const startParticleSize = particleSystem ? particleSystem.material.size : 5;
+
+          if (!gsap || typeof gsap === 'undefined' || typeof gsap.to !== 'function') {
+            console.warn('GSAP 未加载，使用简单动画');
+            // 如果没有 GSAP，使用简单动画
+            const duration = 2500; // 增加持续时间
+            const startTime = Date.now();
+            const animate = () => {
+              const elapsed = Date.now() - startTime;
+              const progress = Math.min(elapsed / duration, 1);
+              const easeProgress = 1 - Math.pow(1 - progress, 3); // ease in
+              
+              // 摄像机向前冲刺
+              camera.position.z = startZ + (targetZ - startZ) * easeProgress;
+              
+              // 粒子向后拉伸效果
+              if (particleSystem) {
+                const stretch = progress; // 0 到 1
+                // 粒子大小随距离增大（向后拉伸的视觉效果）
+                particleSystem.material.size = startParticleSize + stretch * 8;
+                
+                // 同时调整粒子的 Z 轴位置，向后拉伸
+                const positionArray = particleSystem.geometry.attributes.position.array;
+                const stretchFactor = 1 + stretch * 2; // 拉伸因子
+                for (let i = 0; i < particleCount; i++) {
+                  const idx = i * 3 + 2; // Z 轴索引
+                  const originalZ = targets[idx] || 0;
+                  // 粒子向后拉伸
+                  positionArray[idx] = originalZ * stretchFactor;
+                }
+                particleSystem.geometry.attributes.position.needsUpdate = true;
+              }
+              
+              if (progress < 1) {
+                requestAnimationFrame(animate);
+              } else {
+                console.log('Warp Speed 效果完成');
+                resolve();
+              }
+            };
+            animate();
+          } else {
+            gsap.to(camera.position, {
+              z: targetZ,
+              duration: 2.5,
+              ease: 'power2.in',
+              onUpdate: () => {
+                // 粒子向后拉伸
+                if (particleSystem) {
+                  const progress = (camera.position.z - startZ) / (targetZ - startZ);
+                  const stretch = Math.max(0, Math.min(1, progress));
+                  
+                  // 粒子大小增大
+                  particleSystem.material.size = startParticleSize + stretch * 8;
+                  
+                  // 粒子 Z 轴向后拉伸
+                  const positionArray = particleSystem.geometry.attributes.position.array;
+                  const stretchFactor = 1 + stretch * 2;
+                  for (let i = 0; i < particleCount; i++) {
+                    const idx = i * 3 + 2;
+                    const originalZ = targets[idx] || 0;
+                    positionArray[idx] = originalZ * stretchFactor;
+                  }
+                  particleSystem.geometry.attributes.position.needsUpdate = true;
+                }
+              },
+              onComplete: () => {
+                console.log('Warp Speed 效果完成');
+                resolve();
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Warp Speed 效果错误:', error);
+          resolve(); // 即使出错也继续
+        }
+      });
+    }
+
+    // ==================== 烟花效果 ====================
+    async function fireworksTransition() {
+      console.log('开始烟花效果');
+      const fireworkCount = 6; // 减少数量以确保性能
+      const fireworks = [];
+
+      for (let i = 0; i < fireworkCount; i++) {
+        setTimeout(() => {
+          createFirework(fireworks);
+        }, i * 400);
+      }
+
+      // 等待所有烟花完成
+      await new Promise(resolve => setTimeout(resolve, fireworkCount * 400 + 3000));
+      
+      console.log('清理烟花');
+      // 清理烟花
+      fireworks.forEach(fw => {
+        if (fw && fw.group) {
+          scene.remove(fw.group);
+          fw.group.traverse(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+          });
+        }
+      });
+
+      // 过渡到主场景
+      await transitionToMainScene();
+    }
+
+    function createFirework(fireworksArray) {
+      console.log('创建烟花');
+      const group = new THREE.Group();
+      const particleCount = 150; // 增加粒子数
+      const startY = -300; // 调整起始位置
+      const startX = (Math.random() - 0.5) * 600;
+      const targetY = 100 + Math.random() * 150;
+
+      // 升空拖尾
+      const trailGeometry = new THREE.BufferGeometry();
+      const trailPositions = new Float32Array(particleCount * 3);
+      const trailVelocities = new Float32Array(particleCount * 3);
+
+      for (let i = 0; i < particleCount; i++) {
+        const idx = i * 3;
+        trailPositions[idx] = startX + (Math.random() - 0.5) * 10;
+        trailPositions[idx + 1] = startY;
+        trailPositions[idx + 2] = (Math.random() - 0.5) * 10;
+
+        trailVelocities[idx] = (Math.random() - 0.5) * 0.3;
+        trailVelocities[idx + 1] = 3 + Math.random() * 1.5; // 增加上升速度
+        trailVelocities[idx + 2] = (Math.random() - 0.5) * 0.3;
+      }
+
+      const trailMaterial = new THREE.PointsMaterial({
+        size: 5, // 增大拖尾粒子
+        color: 0xffd700,
+        transparent: true,
+        opacity: 1.0,
+        blending: THREE.AdditiveBlending,
+        sizeAttenuation: true,
+      });
+
+      const trail = new THREE.Points(trailGeometry, trailMaterial);
+      trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+      group.add(trail);
+
+      // 爆炸粒子
+      const explosionGeometry = new THREE.BufferGeometry();
+      const explosionPositions = new Float32Array(particleCount * 3);
+      const explosionVelocities = new Float32Array(particleCount * 3);
+      let exploded = false;
+
+      for (let i = 0; i < particleCount; i++) {
+        const idx = i * 3;
+        explosionPositions[idx] = startX;
+        explosionPositions[idx + 1] = targetY;
+        explosionPositions[idx + 2] = 0;
+
+        const angle = (Math.PI * 2 * i) / particleCount;
+        const speed = 3 + Math.random() * 4; // 增加爆炸速度
+        explosionVelocities[idx] = Math.cos(angle) * speed;
+        explosionVelocities[idx + 1] = Math.sin(angle) * speed;
+        explosionVelocities[idx + 2] = (Math.random() - 0.5) * speed;
+      }
+
+      const explosionMaterial = new THREE.PointsMaterial({
+        size: 6, // 增大爆炸粒子
+        color: new THREE.Color().setHSL(Math.random(), 1, 0.6),
+        transparent: true,
+        opacity: 1,
+        blending: THREE.AdditiveBlending,
+        sizeAttenuation: true,
+      });
+
+      const explosion = new THREE.Points(explosionGeometry, explosionMaterial);
+      explosionGeometry.setAttribute('position', new THREE.BufferAttribute(explosionPositions, 3));
+      explosion.visible = false;
+      group.add(explosion);
+
+      scene.add(group);
+
+      const firework = {
+        group,
+        trail,
+        explosion,
+        trailGeometry,
+        explosionGeometry,
+        trailMaterial,
+        explosionMaterial,
+        trailPositions,
+        trailVelocities,
+        explosionPositions,
+        explosionVelocities,
+        targetY,
+        time: 0,
+        exploded: false
+      };
+
+      fireworksArray.push(firework);
+
+      // 动画
+      function animateFirework() {
+        firework.time += 0.016;
+
+        if (!firework.exploded) {
+          // 升空阶段
+          for (let i = 0; i < particleCount; i++) {
+            const idx = i * 3;
+            firework.trailPositions[idx] += firework.trailVelocities[idx];
+            firework.trailPositions[idx + 1] += firework.trailVelocities[idx + 1];
+            firework.trailPositions[idx + 2] += firework.trailVelocities[idx + 2];
+
+            firework.trailVelocities[idx] *= 0.98;
+            firework.trailVelocities[idx + 1] *= 0.98;
+            firework.trailVelocities[idx + 2] *= 0.98;
+
+            if (firework.trailPositions[idx + 1] >= firework.targetY && !firework.exploded) {
+              firework.exploded = true;
+              firework.trail.visible = false;
+              firework.explosion.visible = true;
+            }
+          }
+          firework.trailGeometry.attributes.position.needsUpdate = true;
+        } else {
+          // 爆炸阶段
+          for (let i = 0; i < particleCount; i++) {
+            const idx = i * 3;
+            firework.explosionPositions[idx] += firework.explosionVelocities[idx];
+            firework.explosionPositions[idx + 1] += firework.explosionVelocities[idx + 1];
+            firework.explosionPositions[idx + 2] += firework.explosionVelocities[idx + 2];
+
+            firework.explosionVelocities[idx] *= 0.95;
+            firework.explosionVelocities[idx + 1] -= 0.1; // 重力
+            firework.explosionVelocities[idx + 1] *= 0.95;
+            firework.explosionVelocities[idx + 2] *= 0.95;
+
+            firework.explosionMaterial.opacity = Math.max(0, firework.explosionMaterial.opacity - 0.01);
+          }
+          firework.explosionGeometry.attributes.position.needsUpdate = true;
+        }
+
+        if (firework.explosionMaterial.opacity > 0) {
+          requestAnimationFrame(animateFirework);
+        } else {
+          scene.remove(firework.group);
+        }
+      }
+
+      animateFirework();
+    }
+
+    // ==================== 主场景：数字蛋糕 ====================
+    async function transitionToMainScene() {
+      currentPhase = 'main';
+      // 构建数字蛋糕
+
+      // 重置摄像机
+      if (gsap && typeof gsap.to === 'function') {
+        gsap.to(camera.position, {
+          x: 0,
+          y: 0,
+          z: 800,
+          duration: 2,
+          ease: 'power2.out'
+        });
+      } else {
+        // 简单动画
+        const startPos = { ...camera.position };
+        const targetPos = { x: 0, y: 0, z: 800 };
+        const duration = 2000;
+        const startTime = Date.now();
+        const animate = () => {
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          const easeProgress = 1 - Math.pow(1 - progress, 2); // ease out
+          
+          camera.position.x = startPos.x + (targetPos.x - startPos.x) * easeProgress;
+          camera.position.y = startPos.y + (targetPos.y - startPos.y) * easeProgress;
+          camera.position.z = startPos.z + (targetPos.z - startPos.z) * easeProgress;
+          
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+          }
+        };
+        animate();
+      }
+
+      // 清空粒子系统
+      scene.remove(particleSystem);
+
+      // 创建蛋糕形状
+      createCakeStructure();
+
+      // 添加金粉粒子
+      createGoldDust();
+
+      // 添加背景星空
+      createStarField();
+
+      // 添加悬浮文字
+      createFloatingText();
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      document.getElementById('upload-btn').classList.remove('hidden');
+      document.getElementById('camera-preview').classList.remove('hidden');
+
+      showStatus('欢迎来到2026！', 3000);
+    }
+
+    function createCakeStructure() {
+      const layerCount = 3;
+      const geometries = [
+        new THREE.SphereGeometry(0.5, 8, 8),
+        new THREE.CylinderGeometry(0.3, 0.3, 1, 8),
+        new THREE.ConeGeometry(0.4, 1, 8),
+      ];
+
+      const colors = [0xffd700, 0xc0c0c0, 0xff1493, 0x00ff7f]; // 金、银、红宝石、翡翠
+
+      const instancesPerLayer = 15000;
+      const totalInstances = layerCount * instancesPerLayer;
+
+      const instancedGeometries = geometries.map((geo, idx) => {
+        const instancedMesh = new THREE.InstancedMesh(
+          geo,
+          new THREE.MeshPhysicalMaterial({
+            color: colors[idx % colors.length],
+            metalness: 0.9,
+            roughness: 0.1,
+            emissive: colors[idx % colors.length],
+            emissiveIntensity: 0.3,
+          }),
+          instancesPerLayer
+        );
+
+        const matrix = new THREE.Matrix4();
+        const positions = new Float32Array(instancesPerLayer * 3);
+
+        for (let i = 0; i < instancesPerLayer; i++) {
+          const layer = Math.floor(i / (instancesPerLayer / layerCount));
+          const radius = 100 + layer * 80;
+          const angle = (Math.PI * 2 * i) / (instancesPerLayer / layerCount);
+          const height = -150 + layer * 100 + (Math.random() - 0.5) * 20;
+
+          const x = Math.cos(angle) * radius + (Math.random() - 0.5) * 50;
+          const y = height;
+          const z = Math.sin(angle) * radius + (Math.random() - 0.5) * 50;
+
+          positions[i * 3] = x;
+          positions[i * 3 + 1] = y;
+          positions[i * 3 + 2] = z;
+
+          matrix.setPosition(x, y, z);
+          matrix.scale(1 + Math.random() * 0.5);
+          instancedMesh.setMatrixAt(i, matrix);
+        }
+
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        scene.add(instancedMesh);
+
+        return { mesh: instancedMesh, positions, targetPositions: new Float32Array(positions) };
+      });
+
+      instancedMesh = instancedGeometries;
+    }
+
+    function createGoldDust() {
+      const dustCount = 2000;
+      const dustGeometry = new THREE.BufferGeometry();
+      const dustPositions = new Float32Array(dustCount * 3);
+
+      for (let i = 0; i < dustCount; i++) {
+        const idx = i * 3;
+        dustPositions[idx] = (Math.random() - 0.5) * 2000;
+        dustPositions[idx + 1] = (Math.random() - 0.5) * 2000;
+        dustPositions[idx + 2] = (Math.random() - 0.5) * 2000;
+      }
+
+      dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+
+      const dustMaterial = new THREE.PointsMaterial({
+        size: 1,
+        color: 0xffd700,
+        transparent: true,
+        opacity: 0.6,
+        blending: THREE.AdditiveBlending,
+      });
+
+      const dust = new THREE.Points(dustGeometry, dustMaterial);
+      scene.add(dust);
+    }
+
+    function createStarField() {
+      const starCount = 3000;
+      const starGeometry = new THREE.BufferGeometry();
+      const starPositions = new Float32Array(starCount * 3);
+
+      for (let i = 0; i < starCount; i++) {
+        const idx = i * 3;
+        starPositions[idx] = (Math.random() - 0.5) * 3000;
+        starPositions[idx + 1] = (Math.random() - 0.5) * 3000;
+        starPositions[idx + 2] = (Math.random() - 0.5) * 3000;
+      }
+
+      starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+
+      const starMaterial = new THREE.PointsMaterial({
+        size: 2,
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.8,
+      });
+
+      const stars = new THREE.Points(starGeometry, starMaterial);
+      scene.add(stars);
+    }
+
+    function createFloatingText() {
+      const text = '2026祝你开心...';
+      const textPositions = textToPositions(text, 120);
+      const textGeometry = new THREE.BufferGeometry();
+      textGeometry.setAttribute('position', new THREE.BufferAttribute(textPositions, 3));
+
+      const textMaterial = new THREE.PointsMaterial({
+        size: 4,
+        color: 0xffd700,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+      });
+
+      const textMesh = new THREE.Points(textGeometry, textMaterial);
+      textMesh.position.y = 300;
+      scene.add(textMesh);
+    }
+
+    // ==================== 手势交互 ====================
+    async function initHandTracking() {
+        // 初始化手势识别
+
+      cameraVideo = document.getElementById('camera-video');
+      cameraCanvas = document.getElementById('camera-canvas');
+      cameraCtx = cameraCanvas.getContext('2d');
+
+      cameraCanvas.width = 200;
+      cameraCanvas.height = 150;
+
+      const hands = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+      });
+
+      hands.setOptions({
+        maxNumHands: 2,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7,
+      });
+
+      hands.onResults((results) => {
+        if (!cameraCtx) return;
+
+        cameraCtx.save();
+        cameraCtx.clearRect(0, 0, cameraCanvas.width, cameraCanvas.height);
+        cameraCtx.drawImage(results.image, 0, 0, cameraCanvas.width, cameraCanvas.height);
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          const landmarks = results.multiHandLandmarks[0];
+          const handedness = results.multiHandedness[0];
+
+          // 绘制手部骨骼
+          cameraCtx.strokeStyle = '#ffd700';
+          cameraCtx.lineWidth = 2;
+
+          const connections = [
+            [0, 1, 2, 3, 4],
+            [0, 5, 6, 7, 8],
+            [5, 9, 10, 11, 12],
+            [9, 13, 14, 15, 16],
+            [13, 17, 18, 19, 20],
+            [0, 17]
+          ];
+
+          connections.forEach(connection => {
+            for (let i = 0; i < connection.length - 1; i++) {
+              const start = landmarks[connection[i]];
+              const end = landmarks[connection[i + 1]];
+              cameraCtx.beginPath();
+              cameraCtx.moveTo(start.x * cameraCanvas.width, start.y * cameraCanvas.height);
+              cameraCtx.lineTo(end.x * cameraCanvas.width, end.y * cameraCanvas.height);
+              cameraCtx.stroke();
+            }
+          });
+
+          // 识别手势
+          detectGesture(landmarks);
+        }
+
+        cameraCtx.restore();
+      });
+
+      const camera = new Camera(cameraVideo, {
+        onFrame: async () => {
+          await hands.send({ image: cameraVideo });
+        },
+        width: 1280,
+        height: 720,
+      });
+
+      await camera.start();
+      handTracker = { hands, camera };
+    }
+
+    function detectGesture(landmarks) {
+      // 计算手指数量
+      const fingerTips = [4, 8, 12, 16, 20];
+      const fingerBases = [3, 6, 10, 14, 18];
+      let fingerCount = 0;
+
+      fingerTips.forEach((tip, idx) => {
+        if (landmarks[tip].y < landmarks[fingerBases[idx]].y) {
+          fingerCount++;
+        }
+      });
+
+      // 计算手掌中心
+      const center = landmarks.reduce(
+        (sum, point) => {
+          sum.x += point.x;
+          sum.y += point.y;
+          sum.z += point.z;
+          return sum;
+        },
+        { x: 0, y: 0, z: 0 }
+      );
+      center.x /= landmarks.length;
+      center.y /= landmarks.length;
+      center.z /= landmarks.length;
+
+      handCenter = {
+        x: (center.x - 0.5) * 2,
+        y: (0.5 - center.y) * 2,
+        z: center.z
+      };
+
+      // 判断手势（带防抖）
+      const now = Date.now();
+      if (now - lastGestureTime < gestureCooldown) return;
+
+      if (fingerCount <= 1 && handState !== 'fist') {
+        handState = 'fist';
+        lastGestureTime = now;
+        showStatus('握拳：聚合蛋糕', 1000);
+        aggregateCake();
+      } else if (fingerCount >= 4 && handState !== 'open') {
+        handState = 'open';
+        lastGestureTime = now;
+        showStatus('张开：散开星云', 1000);
+        scatterCake();
+      } else if (fingerCount >= 2 && fingerCount <= 3 && handState !== 'pinch') {
+        handState = 'pinch';
+        lastGestureTime = now;
+        if (userPhotos.length > 0) {
+          showStatus('捏合：聚焦照片', 1000);
+          focusOnPhoto();
+        }
+      }
+    }
+
+    function aggregateCake() {
+      if (!instancedMesh) return;
+
+      instancedMesh.forEach((layer, layerIdx) => {
+        const layerCount = 3;
+        const instancesPerLayer = layer.positions.length / 3;
+
+        for (let i = 0; i < instancesPerLayer; i++) {
+          const targetLayer = Math.floor(i / (instancesPerLayer / layerCount));
+          const radius = 100 + targetLayer * 80;
+          const angle = (Math.PI * 2 * i) / (instancesPerLayer / layerCount);
+          const height = -150 + targetLayer * 100;
+
+          const x = Math.cos(angle) * radius;
+          const y = height;
+          const z = Math.sin(angle) * radius;
+
+          layer.targetPositions[i * 3] = x;
+          layer.targetPositions[i * 3 + 1] = y;
+          layer.targetPositions[i * 3 + 2] = z;
+        }
+      });
+    }
+
+    function scatterCake() {
+      if (!instancedMesh) return;
+
+      instancedMesh.forEach((layer) => {
+        const instancesPerLayer = layer.positions.length / 3;
+
+        for (let i = 0; i < instancesPerLayer; i++) {
+          const radius = 400 + Math.random() * 200;
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(Math.random() * 2 - 1);
+
+          // 球坐标转笛卡尔坐标
+          layer.targetPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+          layer.targetPositions[i * 3 + 1] = radius * Math.cos(phi);
+          layer.targetPositions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
+        }
+      });
+    }
+
+    function focusOnPhoto() {
+      if (userPhotos.length === 0) return;
+
+      const photo = userPhotos[0];
+      if (photo.mesh) {
+        if (gsap && typeof gsap.to === 'function') {
+          gsap.to(camera.position, {
+            x: photo.mesh.position.x,
+            y: photo.mesh.position.y,
+            z: photo.mesh.position.z + 200,
+            duration: 1,
+            ease: 'power2.inOut'
+          });
+        } else {
+          // 简单动画
+          const startPos = { ...camera.position };
+          const targetPos = {
+            x: photo.mesh.position.x,
+            y: photo.mesh.position.y,
+            z: photo.mesh.position.z + 200
+          };
+          const duration = 1000;
+          const startTime = Date.now();
+          const animate = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            camera.position.x = startPos.x + (targetPos.x - startPos.x) * progress;
+            camera.position.y = startPos.y + (targetPos.y - startPos.y) * progress;
+            camera.position.z = startPos.z + (targetPos.z - startPos.z) * progress;
+            
+            if (progress < 1) {
+              requestAnimationFrame(animate);
+            }
+          };
+          animate();
+        }
+      }
+    }
+
+    // ==================== 照片上传 ====================
+    function initPhotoUpload() {
+      const uploadBtn = document.getElementById('upload-btn');
+      const fileInput = document.getElementById('file-input');
+
+      // 主场景的上传按钮（倒计时结束后显示）
+      if (uploadBtn) {
+        uploadBtn.addEventListener('click', () => {
+          fileInput.click();
+        });
+      }
+
+      // 文件选择事件（两个按钮共用）
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file && file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            addPhotoToScene(event.target.result);
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
+
+    function addPhotoToScene(imageSrc) {
+      const loader = new THREE.TextureLoader();
+      loader.load(imageSrc, (texture) => {
+        const photoGeometry = new THREE.PlaneGeometry(100, 100);
+        const photoMaterial = new THREE.MeshPhysicalMaterial({
+          map: texture,
+          metalness: 0.8,
+          roughness: 0.2,
+          emissive: 0xffd700,
+          emissiveIntensity: 0.1,
+        });
+
+        const photoMesh = new THREE.Mesh(photoGeometry, photoMaterial);
+        photoMesh.position.set(
+          (Math.random() - 0.5) * 500,
+          (Math.random() - 0.5) * 500,
+          (Math.random() - 0.5) * 500
+        );
+
+        // 添加金色边框
+        const borderGeometry = new THREE.PlaneGeometry(110, 110);
+        const borderMaterial = new THREE.MeshBasicMaterial({
+          color: 0xffd700,
+          side: THREE.BackSide,
+        });
+        const border = new THREE.Mesh(borderGeometry, borderMaterial);
+        border.position.z = -1;
+        photoMesh.add(border);
+
+        scene.add(photoMesh);
+        userPhotos.push({ mesh: photoMesh, texture });
+
+        showStatus('照片已添加！', 2000);
+      });
+    }
+
+    // ==================== 动画循环 ====================
+    let animationRunning = false;
+    function animate() {
+      if (!animationRunning) {
+        animationRunning = true;
+        console.log('动画循环已启动');
+      }
+      requestAnimationFrame(animate);
+
+      if (currentPhase === 'intro' && particleSystem && particleSystem.geometry && targets) {
+        // 粒子动画 - 平滑流动到目标位置
+        const positionArray = particleSystem.geometry.attributes.position.array;
+        const dt = Math.min(0.016, 0.05); // 限制时间步长
+
+        for (let i = 0; i < particleCount; i++) {
+          const idx = i * 3;
+          const targetX = targets[idx] || 0;
+          const targetY = targets[idx + 1] || 0;
+          const targetZ = targets[idx + 2] || 0;
+          const currentX = positionArray[idx] || 0;
+          const currentY = positionArray[idx + 1] || 0;
+          const currentZ = positionArray[idx + 2] || 0;
+
+          // 计算到目标的距离
+          const dx = targetX - currentX;
+          const dy = targetY - currentY;
+          const dz = targetZ - currentZ;
+          const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+          // 如果距离很近，直接设置到目标位置，确保精确到达
+          if (distance < 0.5) {
+            positionArray[idx] = targetX;
+            positionArray[idx + 1] = targetY;
+            positionArray[idx + 2] = targetZ;
+            velocities[idx] = 0;
+            velocities[idx + 1] = 0;
+            velocities[idx + 2] = 0;
+            continue;
+          }
+
+          // 根据距离调整速度，距离越远速度越快
+          // 当距离很远时（散开状态），速度更快；距离很近时（聚集状态），速度较慢
+          const speedFactor = Math.min(1, distance / 150) * 0.3 + 0.15;
+          
+          const vx = (velocities[idx] || 0) + dx * speedFactor * dt;
+          const vy = (velocities[idx + 1] || 0) + dy * speedFactor * dt;
+          const vz = (velocities[idx + 2] || 0) + dz * speedFactor * dt;
+
+          // 应用阻尼，散开时阻尼稍小，聚集时阻尼稍大
+          // 当接近目标时，增加阻尼确保稳定
+          const damping = distance > 200 ? 0.82 : (distance > 50 ? 0.88 : 0.92);
+          velocities[idx] = vx * damping;
+          velocities[idx + 1] = vy * damping;
+          velocities[idx + 2] = vz * damping;
+
+          // 更新位置
+          positionArray[idx] = currentX + velocities[idx];
+          positionArray[idx + 1] = currentY + velocities[idx + 1];
+          positionArray[idx + 2] = currentZ + velocities[idx + 2];
+        }
+
+        particleSystem.geometry.attributes.position.needsUpdate = true;
+      }
+
+      if (currentPhase === 'main' && instancedMesh) {
+        // 蛋糕动画
+        instancedMesh.forEach((layer) => {
+          const instancesPerLayer = layer.positions.length / 3;
+          const matrix = new THREE.Matrix4();
+
+          for (let i = 0; i < instancesPerLayer; i++) {
+            const idx = i * 3;
+            const targetX = layer.targetPositions[idx];
+            const targetY = layer.targetPositions[idx + 1];
+            const targetZ = layer.targetPositions[idx + 2];
+
+            const currentX = layer.positions[idx];
+            const currentY = layer.positions[idx + 1];
+            const currentZ = layer.positions[idx + 2];
+
+            layer.positions[idx] += (targetX - currentX) * 0.05;
+            layer.positions[idx + 1] += (targetY - currentY) * 0.05;
+            layer.positions[idx + 2] += (targetZ - currentZ) * 0.05;
+
+            matrix.setPosition(
+              layer.positions[idx],
+              layer.positions[idx + 1],
+              layer.positions[idx + 2]
+            );
+            matrix.scale(1 + Math.random() * 0.5);
+            layer.mesh.setMatrixAt(i, matrix);
+          }
+
+          layer.mesh.instanceMatrix.needsUpdate = true;
+        });
+
+        // 手部控制旋转（仅在散开状态下）
+        if (handState === 'open' && handCenter) {
+          const targetRotationY = sceneRotation.y + handCenter.x * 0.05;
+          const targetRotationX = sceneRotation.x + handCenter.y * 0.05;
+          
+          sceneRotation.y += (targetRotationY - sceneRotation.y) * 0.1;
+          sceneRotation.x += (targetRotationX - sceneRotation.x) * 0.1;
+        }
+
+        // 应用旋转
+        scene.rotation.x = sceneRotation.x;
+        scene.rotation.y = sceneRotation.y;
+      }
+
+      // 渲染场景
+      if (composer && scene && camera) {
+        try {
+          composer.render();
+        } catch (e) {
+          // 如果 composer 渲染失败，使用基础渲染
+          if (renderer && scene && camera) {
+            renderer.render(scene, camera);
+          }
+        }
+      } else if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+      }
+    }
+
+    function onWindowResize() {
+      if (camera) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+      }
+      if (renderer) {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+      if (composer) {
+        composer.setSize(window.innerWidth, window.innerHeight);
+      }
+    }
+
+    // ==================== 初始化 ====================
+    async function init() {
+      try {
+        console.log('开始初始化...');
+        
+        // 确保模块已加载
+        if (!THREE) {
+          console.error('Three.js 未加载');
+          return;
+        }
+        
+        // 先启动动画循环，确保场景可以渲染
+        animate();
+        
+        // 初始化场景（后台进行，不显示加载进度）
+        initScene();
+        
+        initPhotoUpload();
+
+        // 给一点时间让场景渲染
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // 确保场景已渲染
+        if (renderer && scene && camera) {
+          renderer.render(scene, camera);
+          console.log('初始场景渲染完成');
+          console.log('场景子对象数量:', scene.children.length);
+          console.log('场景子对象:', scene.children.map(c => c.type));
+        }
+        
+        console.log('粒子系统状态:', {
+          exists: !!particleSystem,
+          geometry: !!particleSystem?.geometry,
+          material: !!particleSystem?.material,
+          inScene: scene.children.includes(particleSystem),
+          particleCount: particleSystem?.geometry?.attributes?.position?.count / 3
+        });
+        
+        // 强制渲染几帧，确保可见
+        for (let i = 0; i < 5; i++) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          if (renderer && scene && camera) {
+            if (composer) {
+              composer.render();
+            } else {
+              renderer.render(scene, camera);
+            }
+          }
+        }
+        console.log('强制渲染完成');
+        
+        // 显示开始界面（如果还没显示的话）
+        const startScreen = document.getElementById('start-screen');
+        if (startScreen) {
+          startScreen.classList.remove('hidden');
+        }
+        
+        // 不自动开始倒计时，等待用户点击按钮
+        console.log('等待用户点击开始按钮...');
+      } catch (error) {
+        console.error('初始化错误:', error);
+        console.error('错误堆栈:', error.stack);
+        showStatus('初始化失败: ' + (error.message || '未知错误') + '，请查看控制台（F12）', 10000);
+      }
+    }
+
+    // 启动应用
+    async function startApp() {
+      console.log('准备启动应用...');
+      // 等待 DOM 加载完成
+      if (document.readyState === 'loading') {
+        await new Promise(resolve => {
+          window.addEventListener('DOMContentLoaded', resolve);
+        });
+      }
+      
+      // 等待可选模块加载完成（最多等待2秒）
+      try {
+        await Promise.race([
+          modulesLoadingPromise,
+          new Promise(resolve => setTimeout(resolve, 2000)) // 最多等待2秒
+        ]);
+      } catch (e) {
+        console.warn('模块加载等待出错:', e);
+      }
+      
+      console.log('开始初始化应用');
+      console.log('THREE:', typeof THREE);
+      console.log('EffectComposer:', typeof EffectComposer);
+      console.log('GSAP:', gsap ? '已加载' : '未加载');
+      
+      await init();
+      
+      // 设置开始按钮事件
+      setupStartButton();
+    }
+    
+    // 设置开始按钮事件
+    function setupStartButton() {
+      const startBtn = document.getElementById('start-btn');
+      const startUploadBtn = document.getElementById('start-upload-btn');
+      const fileInput = document.getElementById('file-input');
+      
+      // 开始按钮：开始倒计时
+      if (startBtn) {
+        startBtn.addEventListener('click', async () => {
+          console.log('用户点击开始按钮');
+          // 隐藏开始界面
+          const startScreen = document.getElementById('start-screen');
+          if (startScreen) {
+            startScreen.classList.add('hidden');
+          }
+          
+          // 开始倒计时序列
+          await startIntroSequence();
+          
+          // 初始化手势识别（如果需要）
+          if (Hands && Camera) {
+            try {
+              await initHandTracking();
+            } catch (handError) {
+              console.warn('手势识别初始化失败:', handError);
+              showStatus('手势识别未启用，其他功能正常', 3000);
+            }
+          } else {
+            console.warn('MediaPipe 未加载，跳过手势识别');
+            showStatus('手势识别不可用（MediaPipe 未加载）', 3000);
+          }
+        });
+      }
+      
+      // 开始界面的上传按钮
+      if (startUploadBtn && fileInput) {
+        startUploadBtn.addEventListener('click', () => {
+          fileInput.click();
+        });
+      }
+    }
+    
+    // 立即启动（模块导入完成后）
+    startApp().catch(error => {
+      console.error('应用启动失败:', error);
+      // 启动失败
+      showStatus('应用启动失败，请刷新页面', 10000);
+    });
+  </script>
+</body>
+</html>

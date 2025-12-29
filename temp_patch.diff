@@ -1,0 +1,112 @@
+﻿*** Begin Patch
+*** Update File: celeration.html
+@@
+-  import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+-  import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+-  import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
++  import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
++  import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
++  import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
++  import { BokehPass } from "three/addons/postprocessing/BokehPass.js";
+@@
+-  const composer = new EffectComposer(renderer);
+-  composer.addPass(new RenderPass(scene, camera));
++  const composer = new EffectComposer(renderer);
++  const renderPass = new RenderPass(scene, camera);
++  composer.addPass(renderPass);
+   const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.25, 0.6, 0.95);
+   bloomPass.threshold = 0.0;
+   bloomPass.strength = 2.3;
+   bloomPass.radius = 0.85;
+   composer.addPass(bloomPass);
++  const bokehParams = { focus: 120, aperture: 0.00012, maxblur: 0.01 };
++  const bokehPass = new BokehPass(scene, camera, bokehParams);
++  composer.addPass(bokehPass);
++  const dofState = { focus: bokehParams.focus };
++  function updateDofFocus(value) {
++    if (bokehPass && bokehPass.uniforms) {
++      bokehPass.uniforms.focus.value = value;
++    }
++  }
++  updateDofFocus(dofState.focus);
+@@
+-  const digits = ["5", "4", "3", "1", "2026"];
++  const digits = ["5", "4", "3", "2", "1", "2026"];
+@@
+   function updateParticles(delta) {
+     const positions = particleGeo.attributes.position.array;
+     for (let i = 0; i < positions.length; i += 3) {
+@@
+       positions[i + 2] = THREE.MathUtils.lerp(morphStart[i + 2], morphTarget[i + 2], morphProgress) - warpFactor *
+         (Math.random() * 800);
+     }
+     particleGeo.attributes.position.needsUpdate = true;
++    particleMat.size = THREE.MathUtils.lerp(2, 7, warpFactor);
++    starMat.opacity = THREE.MathUtils.lerp(0.35, 0.8, 1 - warpFactor);
+   }
+@@
+   function triggerWarpSpeed() {
+     new TWEEN.Tween({ warp: 0 })
+       .to({ warp: 1 }, 1800)
+@@
+         launchFireworks();
+       })
+       .start();
+     new TWEEN.Tween(camera.position)
+       .to({ z: 40, y: 20 }, 1800)
+       .easing(TWEEN.Easing.Cubic.In)
+       .start();
++    new TWEEN.Tween(dofState)
++      .to({ focus: 45 }, 1800)
++      .easing(TWEEN.Easing.Cubic.InOut)
++      .onUpdate(obj => updateDofFocus(obj.focus))
++      .start();
+   }
+@@
+-  const gravity = new THREE.Vector3(0, -9.8, 0);
++  const gravity = new THREE.Vector3(0, -9.8, 0);
++  const ascentDrag = 0.992;
++  const explosionDrag = 0.985;
+@@
+         this.velocity.addScaledVector(gravity, delta * 0.2);
++        this.velocity.multiplyScalar(ascentDrag);
+         this.position.addScaledVector(this.velocity, delta);
+@@
+-          for (let i = 0; i < vel.length; i++) {
+-            const vx = vel[i];
+-            vx.addScaledVector(gravity, delta * 0.35);
+-            attr.setXYZ(
++          for (let i = 0; i < vel.length; i++) {
++            const vx = vel[i];
++            vx.addScaledVector(gravity, delta * 0.35);
++            vx.multiplyScalar(explosionDrag);
++            attr.setXYZ(
+               i,
+               attr.getX(i) + vx.x * delta,
+               attr.getY(i) + vx.y * delta,
+@@
+     setTimeout(() => {
+       fireworksPhase = false;
+       fireworkGroup.visible = false;
+       fireworkGroup.children.forEach(child => fireworkGroup.remove(child));
++      fireworks.length = 0;
+       buildCakeScene();
+     }, 6000);
+   }
+@@
+   function buildCakeScene() {
+     cakeGroup.visible = true;
+     updateProgress(90);
++    new TWEEN.Tween(dofState)
++      .to({ focus: 140 }, 2400)
++      .easing(TWEEN.Easing.Cubic.Out)
++      .onUpdate(obj => updateDofFocus(obj.focus))
++      .start();
+@@
+       composer.setSize(w, h);
+       bloomPass.setSize(w, h);
++      bokehPass.setSize(w, h);
+       overlay.width = overlay.clientWidth;
+       overlay.height = overlay.clientHeight;
+     });
+*** End Patch

@@ -1,10 +1,911 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+  <meta charset="UTF-8" />
+  <title>2026 黑金互动庆典</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+      :root {
+          color-scheme: dark;
+          --gold: #f5d37a;
+          --bg: #020203;
+          --frost: rgba(15, 15, 20, 0.65);
+      }
+      * { box-sizing: border-box; }
+      body {
+          margin: 0;
+          background: radial-gradient(circle at 20% 20%, #111016, #020203 60%);
+          font-family: "Segoe UI", "Noto Sans SC", sans-serif;
+          color: var(--gold);
+          overflow: hidden;
+      }
+      #scene {
+          position: fixed;
+          inset: 0;
+      }
+      canvas { display: block; }
+      #hud {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          padding: 18px 32px;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          pointer-events: none;
+      }
+      .panel {
+          pointer-events: auto;
+          backdrop-filter: blur(16px);
+          border: 1px solid rgba(245, 211, 122, 0.25);
+          background: var(--frost);
+          border-radius: 18px;
+          padding: 16px 22px;
+          max-width: 420px;
+          box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+      }
+      .panel h1 {
+          margin: 0 0 8px;
+          font-size: 20px;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+      }
+      .panel p {
+          margin: 6px 0;
+          line-height: 1.45;
+          font-size: 14px;
+      }
+      #controls {
+          display: flex;
+          gap: 16px;
+          align-items: center;
+      }
+      button, label {
+          pointer-events: auto;
+          cursor: pointer;
+          border: none;
+          border-radius: 999px;
+          padding: 10px 20px;
+          background: linear-gradient(120deg, #f5d37a, #c58c30);
+          color: #080808;
+          font-size: 14px;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+          transition: transform 0.2s ease;
+      }
+      button:hover, label:hover { transform: translateY(-2px); }
+      input[type="file"] { display: none; }
+      #progress {
+          position: fixed;
+          bottom: 28px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: min(520px, 90vw);
+          border-radius: 999px;
+          border: 1px solid rgba(245, 211, 122, 0.3);
+          background: rgba(255,255,255,0.05);
+          overflow: hidden;
+          backdrop-filter: blur(12px);
+      }
+      #progress span {
+          display: block;
+          height: 12px;
+          width: 0%;
+          background: linear-gradient(90deg, #f5d37a, #f78d1f);
+          transition: width 0.3s ease;
+      }
+      #progress label {
+          position: absolute;
+          inset: 0;
+          font-size: 12px;
+          text-align: center;
+          padding-top: 12px;
+          color: var(--gold);
+          letter-spacing: 1px;
+      }
+      #cameraFeed {
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          width: 240px;
+          aspect-ratio: 4 / 3;
+          border-radius: 20px;
+          overflow: hidden;
+          border: 1px solid rgba(245,211,122,0.35);
+          background: rgba(0,0,0,0.6);
+          box-shadow: 0 10px 40px rgba(0,0,0,0.55);
+      }
+      #cameraFeed video, #cameraFeed canvas {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+      }
+      #legend {
+          position: fixed;
+          left: 20px;
+          bottom: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+      }
+      #legend span {
+          font-size: 13px;
+          letter-spacing: 1px;
+          background: rgba(12,12,18,0.75);
+          padding: 6px 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(245,211,122,0.2);
+      }
+      @media (max-width: 720px) {
+          #hud {
+              flex-direction: column;
+              gap: 16px;
+              padding: 18px;
+          }
+          .panel { width: 100%; }
+          #controls { flex-wrap: wrap; }
+          #cameraFeed {
+              width: 160px;
+              bottom: 12px;
+              right: 12px;
+          }
+      }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "@tweenjs/tween.js": "https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@18.6.4/dist/tween.esm.js"
+      }
+    }
+  </script>
 </head>
 <body>
-$END$
+<div id="scene"></div>
+
+<div id="hud">
+  <div class="panel">
+    <h1>BLACK & GOLD NEBULA CAKE</h1>
+    <p>五段式体验：粒子倒计时 → 星河跃迁 → 烟花礼炮 → 数字蛋糕 → 手势交互。加载完成后，请授权摄像头，使用握拳 / 张掌 /
+      捏合操控。</p>
+  </div>
+  <div id="controls" class="panel">
+    <div>
+      <strong>交互提示</strong>
+      <p>Fist：收拢成蛋糕 · Open：散成星云 · Pinch：查看照片 · Move：旋转星云</p>
+    </div>
+    <label for="photoUpload">上传照片</label>
+    <input id="photoUpload" type="file" accept="image/*" />
+  </div>
+</div>
+
+<div id="legend">
+  <span>Fist → 聚合</span>
+  <span>Open → 散开</span>
+  <span>Pinch → 聚焦照片</span>
+  <span>Move → 旋转星云</span>
+</div>
+
+<div id="progress">
+  <span id="progressBar"></span>
+  <label id="progressText">加载资源 0%</label>
+</div>
+
+<div id="cameraFeed">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="overlay"></canvas>
+</div>
+
+<script type="module">
+  import * as THREE from "three";
+  import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+  import { FontLoader } from "three/addons/loaders/FontLoader.js";
+  import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
+  import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+  import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+  import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+  import TWEEN from "@tweenjs/tween.js";
+  import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0?
+  module";
+
+  const container = document.getElementById("scene");
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.setClearColor("#030305", 1);
+  container.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 5000);
+  camera.position.set(0, 60, 280);
+  scene.add(camera);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.enablePan = false;
+  controls.minDistance = 80;
+  controls.maxDistance = 600;
+  controls.autoRotate = false;
+
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.25, 0.6, 0.95);
+  bloomPass.threshold = 0.0;
+  bloomPass.strength = 2.3;
+  bloomPass.radius = 0.85;
+  composer.addPass(bloomPass);
+
+  const clock = new THREE.Clock();
+
+  // Lighting & ambiance
+  const hemi = new THREE.HemisphereLight(0xfff0da, 0x08090d, 1.2);
+  scene.add(hemi);
+  const spot = new THREE.SpotLight(0xffd37a, 2.0, 600, Math.PI / 4, 0.4, 1.2);
+  spot.position.set(120, 200, 150);
+  scene.add(spot, spot.target);
+
+  // Starfield background
+  const starGeo = new THREE.BufferGeometry();
+  const starCount = 4000;
+  const starPos = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount; i++) {
+    const r = 900;
+    starPos[i * 3] = (Math.random() - 0.5) * r;
+    starPos[i * 3 + 1] = (Math.random() - 0.5) * r;
+    starPos[i * 3 + 2] = (Math.random() - 0.5) * r;
+  }
+  starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0x8c7c5b, size: 1.6, transparent: true, opacity: 0.8 });
+  const stars = new THREE.Points(starGeo, starMat);
+  scene.add(stars);
+
+  // Floating gold dust layer
+  const dustGeo = new THREE.BufferGeometry();
+  const dustCount = 1200;
+  const dustPos = new Float32Array(dustCount * 3);
+  const dustSpeed = new Float32Array(dustCount);
+  for (let i = 0; i < dustCount; i++) {
+    dustPos[i * 3] = (Math.random() - 0.5) * 200;
+    dustPos[i * 3 + 1] = Math.random() * 120;
+    dustPos[i * 3 + 2] = (Math.random() - 0.5) * 200;
+    dustSpeed[i] = 0.2 + Math.random() * 0.4;
+  }
+  dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3));
+  const dustMat = new THREE.PointsMaterial({ color: 0xfff2b0, size: 1.2, transparent: true, opacity: 0.9, blending:
+    THREE.AdditiveBlending });
+  const dust = new THREE.Points(dustGeo, dustMat);
+  scene.add(dust);
+
+  // Intro particle system
+  const particleCount = 6500;
+  const particleGeo = new THREE.BufferGeometry();
+  const particleArray = new Float32Array(particleCount * 3);
+  for (let i = 0; i < particleCount; i++) {
+    particleArray[i * 3] = (Math.random() - 0.5) * 200;
+    particleArray[i * 3 + 1] = (Math.random() - 0.5) * 200;
+    particleArray[i * 3 + 2] = (Math.random() - 0.5) * 200;
+  }
+  particleGeo.setAttribute("position", new THREE.BufferAttribute(particleArray, 3));
+  const particleMat = new THREE.PointsMaterial({
+    color: 0xf9d788,
+    size: 2.0,
+    transparent: true,
+    opacity: 0.9,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  const particleSystem = new THREE.Points(particleGeo, particleMat);
+  scene.add(particleSystem);
+
+  let morphStart = new Float32Array(particleArray);
+  let morphTarget = new Float32Array(particleArray);
+  let morphProgress = 0;
+  let warpFactor = 0;
+  let introFinished = false;
+
+  function setParticleTarget(targetPositions, duration = 2200) {
+    morphStart = new Float32Array(particleGeo.attributes.position.array);
+    for (let i = 0; i < particleCount; i++) {
+      const target = targetPositions[i % targetPositions.length];
+      morphTarget[i * 3] = target.x + (Math.random() - 0.5) * 1.5;
+      morphTarget[i * 3 + 1] = target.y + (Math.random() - 0.5) * 1.5;
+      morphTarget[i * 3 + 2] = target.z + (Math.random() - 0.5) * 1.5;
+    }
+    new TWEEN.Tween({ progress: 0 })
+      .to({ progress: 1 }, duration)
+      .easing(TWEEN.Easing.Quadratic.InOut)
+      .onUpdate(obj => (morphProgress = obj.progress))
+      .start();
+  }
+
+  function updateParticles(delta) {
+    const positions = particleGeo.attributes.position.array;
+    for (let i = 0; i < positions.length; i += 3) {
+      const s = morphStart[i];
+      const t = morphTarget[i];
+      positions[i] = THREE.MathUtils.lerp(s, t, morphProgress);
+      positions[i + 1] = THREE.MathUtils.lerp(morphStart[i + 1], morphTarget[i + 1], morphProgress);
+      positions[i + 2] = THREE.MathUtils.lerp(morphStart[i + 2], morphTarget[i + 2], morphProgress) - warpFactor *
+        (Math.random() * 800);
+    }
+    particleGeo.attributes.position.needsUpdate = true;
+  }
+
+  // Digit targets
+  const digits = ["5", "4", "3", "1", "2026"];
+  const digitTargets = {};
+  let fontLoaded = false;
+  const loader = new FontLoader();
+  loader.load(
+    "https://threejs.org/examples/fonts/helvetiker_regular.typeface.json",
+    font => {
+      digits.forEach(text => {
+        const geo = new TextGeometry(text, {
+          font,
+          size: 60,
+          depth: 4,
+          curveSegments: 12,
+          bevelEnabled: false
+        });
+        geo.computeBoundingBox();
+        geo.center();
+        const pos = geo.attributes.position;
+        const temp = [];
+        for (let i = 0; i < pos.count; i++) {
+          temp.push(new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)));
+        }
+        digitTargets[text] = temp;
+      });
+      createFloatingText(font);
+      fontLoaded = true;
+      prepareIntro();
+    },
+    xhr => {
+      updateProgress(Math.round((xhr.loaded / xhr.total) * 40));
+    }
+  );
+
+  // Floating celebratory text
+  let floatingText;
+  function createFloatingText(font) {
+    const geo = new TextGeometry("2026祝你开心..", {
+      font,
+      size: 18,
+      depth: 2,
+      curveSegments: 8
+    });
+    geo.computeBoundingBox();
+    geo.center();
+    const mat = new THREE.MeshPhysicalMaterial({
+      color: 0xffe6a5,
+      emissive: 0xfff2c1,
+      emissiveIntensity: 1.4,
+      metalness: 1,
+      roughness: 0.2,
+      clearcoat: 0.8,
+      transparent: true,
+      opacity: 0.95
+    });
+    floatingText = new THREE.Mesh(geo, mat);
+    floatingText.position.set(0, 120, -60);
+    scene.add(floatingText);
+  }
+
+  // Intro sequencing
+  let introIndex = 0;
+  function prepareIntro() {
+    updateProgress(55);
+    morphToDigitSequence();
+  }
+
+  function morphToDigitSequence() {
+    if (introIndex >= digits.length) {
+      setTimeout(triggerWarpSpeed, 1200);
+      return;
+    }
+    const text = digits[introIndex];
+    setParticleTarget(digitTargets[text], 2000);
+    introIndex++;
+    setTimeout(morphToDigitSequence, 2400);
+  }
+
+  function triggerWarpSpeed() {
+    new TWEEN.Tween({ warp: 0 })
+      .to({ warp: 1 }, 1800)
+      .easing(TWEEN.Easing.Cubic.In)
+      .onUpdate(obj => (warpFactor = obj.warp))
+      .onComplete(() => {
+        warpFactor = 0;
+        introFinished = true;
+        particleSystem.visible = false;
+        launchFireworks();
+      })
+      .start();
+    new TWEEN.Tween(camera.position)
+      .to({ z: 40, y: 20 }, 1800)
+      .easing(TWEEN.Easing.Cubic.In)
+      .start();
+  }
+
+  // Fireworks transition
+  const fireworkGroup = new THREE.Group();
+  scene.add(fireworkGroup);
+  const fireworks = [];
+  const gravity = new THREE.Vector3(0, -9.8, 0);
+
+  class Firework {
+    constructor() {
+      this.state = "ascend";
+      this.elapsed = 0;
+      const riseGeo = new THREE.BufferGeometry();
+      const points = new Float32Array(60 * 3);
+      riseGeo.setAttribute("position", new THREE.BufferAttribute(points, 3));
+      const riseMat = new THREE.PointsMaterial({
+        color: 0xffe199,
+        size: 2,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      });
+      this.points = new THREE.Points(riseGeo, riseMat);
+      this.velocity = new THREE.Vector3((Math.random() - 0.5) * 10, 50 + Math.random() * 30, (Math.random() - 0.5) *
+        10);
+      this.position = new THREE.Vector3((Math.random() - 0.5) * 80, -60, (Math.random() - 0.5) * 40);
+      this.trail = [];
+      this.explosion = null;
+      fireworkGroup.add(this.points);
+    }
+    update(delta) {
+      this.elapsed += delta;
+      if (this.state === "ascend") {
+        this.velocity.addScaledVector(gravity, delta * 0.2);
+        this.position.addScaledVector(this.velocity, delta);
+        this.trail.unshift(this.position.clone());
+        if (this.trail.length > 60) this.trail.pop();
+        const attr = this.points.geometry.attributes.position;
+        for (let i = 0; i < this.trail.length; i++) {
+          attr.setXYZ(i, this.trail[i].x, this.trail[i].y, this.trail[i].z);
+        }
+        attr.needsUpdate = true;
+        if (this.velocity.y <= 0 || this.position.y > 60) {
+          this.state = "explode";
+          this.spawnExplosion();
+        }
+      } else if (this.state === "explode") {
+        this.explosion.update(delta);
+        if (this.explosion.done) {
+          fireworkGroup.remove(this.points);
+          fireworkGroup.remove(this.explosion.points);
+          return false;
+        }
+      }
+      return true;
+    }
+    spawnExplosion() {
+      const count = 240 + Math.floor(Math.random() * 80);
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(count * 3);
+      const vel = [];
+      for (let i = 0; i < count; i++) {
+        const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.2, Math.random() - 0.5).normalize();
+        vel.push(dir.multiplyScalar(25 + Math.random() * 25));
+        pos[i * 3] = this.position.x;
+        pos[i * 3 + 1] = this.position.y;
+        pos[i * 3 + 2] = this.position.z;
+      }
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.PointsMaterial({
+        color: new THREE.Color().setHSL(0.08 + Math.random() * 0.1, 0.8, 0.6),
+        size: 2.5,
+        transparent: true,
+        opacity: 1,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      });
+      const points = new THREE.Points(geo, mat);
+      fireworkGroup.add(points);
+      this.explosion = {
+        points,
+        vel,
+        life: 0,
+        done: false,
+        update: delta => {
+          this.explosion.life += delta;
+          const attr = geo.attributes.position;
+          for (let i = 0; i < vel.length; i++) {
+            const vx = vel[i];
+            vx.addScaledVector(gravity, delta * 0.35);
+            attr.setXYZ(
+              i,
+              attr.getX(i) + vx.x * delta,
+              attr.getY(i) + vx.y * delta,
+              attr.getZ(i) + vx.z * delta
+            );
+          }
+          points.material.opacity = THREE.MathUtils.clamp(1.2 - this.explosion.life, 0, 1);
+          if (this.explosion.life > 1.2) {
+            this.explosion.done = true;
+          }
+          attr.needsUpdate = true;
+        }
+      };
+    }
+  }
+
+  let fireworksPhase = false;
+  function launchFireworks() {
+    fireworksPhase = true;
+    fireworkGroup.visible = true;
+    updateProgress(75);
+    const launchInterval = setInterval(() => {
+      fireworks.push(new Firework());
+      if (fireworks.length > 8) clearInterval(launchInterval);
+    }, 600);
+    setTimeout(() => {
+      fireworksPhase = false;
+      fireworkGroup.visible = false;
+      fireworkGroup.children.forEach(child => fireworkGroup.remove(child));
+      buildCakeScene();
+    }, 6000);
+  }
+
+  // Cake scene
+  const cakeGroup = new THREE.Group();
+  cakeGroup.visible = false;
+  scene.add(cakeGroup);
+  const photoGroup = new THREE.Group();
+  cakeGroup.add(photoGroup);
+
+  const instanceMetas = [];
+  let structureState = "cake";
+  let allowRotationFromHand = false;
+
+  function buildCakeScene() {
+    cakeGroup.visible = true;
+    updateProgress(90);
+    const shapes = [
+      { geometry: new THREE.SphereGeometry(1.2, 14, 14), color: 0xffd37a },
+      { geometry: new THREE.CylinderGeometry(0.8, 0.8, 1.8, 14), color: 0xdedeea },
+      { geometry: new THREE.ConeGeometry(0.9, 2.4, 16), color: 0xc74354 },
+      { geometry: new THREE.CylinderGeometry(0.6, 1.2, 2.1, 10), color: 0x2fe28f }
+    ];
+    const totalInstances = 3200;
+    const perMesh = Math.floor(totalInstances / shapes.length);
+    shapes.forEach(shape => {
+      const material = new THREE.MeshPhysicalMaterial({
+        color: shape.color,
+        emissive: new THREE.Color(shape.color).multiplyScalar(0.4),
+        emissiveIntensity: 0.9,
+        metalness: 1,
+        roughness: 0.15,
+        clearcoat: 0.9,
+        reflectivity: 0.8
+      });
+      const mesh = new THREE.InstancedMesh(shape.geometry, material, perMesh);
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      cakeGroup.add(mesh);
+      for (let i = 0; i < perMesh; i++) {
+        const meta = {
+          mesh,
+          index: i,
+          cakePosition: calcCakePosition(i, perMesh),
+          scatterPosition: calcScatterPosition(),
+          currentPosition: new THREE.Vector3(),
+          rotationSpeed: Math.random() * 0.5 + 0.2
+        };
+        meta.currentPosition.copy(meta.scatterPosition);
+        instanceMetas.push(meta);
+      }
+    });
+    structureState = "cake";
+    allowRotationFromHand = false;
+    updateProgress(100);
+    document.getElementById("progress").style.opacity = "0";
+    setTimeout(() => (document.getElementById("progress").style.display = "none"), 1200);
+  }
+
+  function calcCakePosition(index, perMesh) {
+    const layerHeights = [0, 18, 34];
+    const radii = [48, 34, 20];
+    const layer = (index % 3);
+    const radius = radii[layer];
+    const height = layerHeights[layer];
+    const angle = ((index / perMesh) + Math.random() * 0.02) * Math.PI * 2 * (layer + 1);
+    return new THREE.Vector3(
+      Math.cos(angle) * (radius + Math.random() * 3),
+      height + (Math.random() - 0.5) * 2,
+      Math.sin(angle) * (radius + Math.random() * 3)
+    );
+  }
+
+  function calcScatterPosition() {
+    const r = 80 + Math.random() * 40;
+    const phi = Math.random() * Math.PI * 2;
+    const costheta = Math.random() * 2 - 1;
+    const theta = Math.acos(costheta);
+    return new THREE.Vector3(
+      r * Math.sin(theta) * Math.cos(phi),
+      r * Math.cos(theta) * 0.6,
+      r * Math.sin(theta) * Math.sin(phi)
+    );
+  }
+
+  function updateInstances(delta) {
+    instanceMetas.forEach(meta => {
+      const target = structureState === "cake" ? meta.cakePosition : meta.scatterPosition;
+      meta.currentPosition.lerp(target, delta * (structureState === "cake" ? 1.5 : 0.8));
+      const m = new THREE.Matrix4();
+      const q = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          Math.sin(performance.now() * 0.001 + meta.index) * 0.3,
+          performance.now() * 0.0007 * meta.rotationSpeed,
+          0
+        )
+      );
+      m.compose(meta.currentPosition, q, new THREE.Vector3(1, 1, 1));
+      meta.mesh.setMatrixAt(meta.index, m);
+      meta.mesh.instanceMatrix.needsUpdate = true;
+    });
+    cakeGroup.rotation.y += delta * 0.2;
+  }
+
+  function setStructureState(state) {
+    if (structureState === state) return;
+    structureState = state;
+    allowRotationFromHand = state === "scatter";
+  }
+
+  // Photo upload
+  const uploadInput = document.getElementById("photoUpload");
+  uploadInput.addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const loader = new THREE.TextureLoader();
+    loader.load(url, texture => {
+      const aspect = texture.image.width / texture.image.height;
+      const height = 12;
+      const width = height * aspect;
+      const planeGeo = new THREE.PlaneGeometry(width, height);
+      const planeMat = new THREE.MeshPhysicalMaterial({
+        map: texture,
+        emissive: 0x775522,
+        emissiveIntensity: 0.6,
+        metalness: 0.8,
+        roughness: 0.3,
+        transparent: true,
+        opacity: 0.95,
+        side: THREE.DoubleSide
+      });
+      const plane = new THREE.Mesh(planeGeo, planeMat);
+      plane.position.copy(calcScatterPosition().multiplyScalar(0.6));
+      const frameGeo = new THREE.BoxGeometry(width + 1, height + 1, 0.8);
+      const frameMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffd37a,
+        metalness: 1,
+        roughness: 0.15
+      });
+      const frame = new THREE.Mesh(frameGeo, frameMat);
+      const group = new THREE.Group();
+      group.add(plane);
+      frame.position.z = -0.2;
+      group.add(frame);
+      group.userData = {
+        cakePosition: new THREE.Vector3((Math.random() - 0.5) * 20, 40 + Math.random() * 6, (Math.random() - 0.5) *
+          20),
+        scatterPosition: calcScatterPosition(),
+        currentPosition: plane.position.clone()
+      };
+      photoGroup.add(group);
+    });
+  });
+
+  function updatePhotos(delta) {
+    photoGroup.children.forEach(child => {
+      const data = child.userData;
+      if (!data) return;
+      const target = structureState === "cake" ? data.cakePosition : data.scatterPosition;
+      data.currentPosition.lerp(target, delta * 1.4);
+      child.position.copy(data.currentPosition);
+      child.rotation.y += delta * 0.3;
+    });
+  }
+
+  // MediaPipe Hand Landmarker
+  const video = document.getElementById("video");
+  const overlay = document.getElementById("overlay");
+  const overlayCtx = overlay.getContext("2d");
+  overlay.width = overlay.clientWidth;
+  overlay.height = overlay.clientHeight;
+
+  let handLandmarker = null;
+  let activePhotoIndex = 0;
+  let pinchFocus = false;
+
+  async function initHands() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height:
+            480 } });
+      video.srcObject = stream;
+    } catch (err) {
+      console.warn("摄像头不可用", err);
+    }
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+    );
+    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/
+        float16/1/hand_landmarker.task" },
+      numHands: 1,
+      runningMode: "VIDEO"
+    });
+    requestAnimationFrame(predictHands);
+  }
+
+    function drawLandmarks(landmarks) {
+      overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+      if (!landmarks) return;
+      overlayCtx.strokeStyle = "rgba(245,211,122,0.8)";
+      overlayCtx.lineWidth = 2;
+      overlayCtx.fillStyle = "rgba(245,211,122,0.9)";
+      const connections = [
+        [0,1],[1,2],[2,3],[3,4],
+        [5,6],[6,7],[7,8],
+        [9,10],[10,11],[11,12],
+        [13,14],[14,15],[15,16],
+        [17,18],[18,19],[19,20],
+        [5,9],[9,13],[13,17]
+      ];
+      connections.forEach(([a,b]) => {
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(landmarks[a].x * overlay.width, landmarks[a].y * overlay.height);
+        overlayCtx.lineTo(landmarks[b].x * overlay.width, landmarks[b].y * overlay.height);
+        overlayCtx.stroke();
+      });
+      landmarks.forEach(point => {
+        overlayCtx.beginPath();
+        overlayCtx.arc(point.x * overlay.width, point.y * overlay.height, 3, 0, Math.PI * 2);
+        overlayCtx.fill();
+      });
+    }
+
+    function analyzeGesture(landmarks) {
+      const wrist = landmarks[0];
+      const middleTip = landmarks[12];
+      const indexTip = landmarks[8];
+      const pinkyTip = landmarks[20];
+      const thumbTip = landmarks[4];
+      const spread =
+        distance(wrist, indexTip) +
+        distance(wrist, middleTip) +
+        distance(wrist, pinkyTip);
+      const pinch = distance(thumbTip, indexTip);
+      const normalizedSpread = spread / 3;
+      if (pinch < 0.05) {
+        handlePinch();
+        return "pinch";
+      }
+      if (normalizedSpread < 0.12) {
+        setStructureState("cake");
+        pinchFocus = false;
+        return "fist";
+      }
+      if (normalizedSpread > 0.2) {
+        setStructureState("scatter");
+        pinchFocus = false;
+        const centerX = landmarks.reduce((sum, p) => sum + p.x, 0) / landmarks.length;
+        if (allowRotationFromHand) {
+          const rotation = THREE.MathUtils.mapLinear(centerX, 0, 1, -0.8, 0.8);
+          cakeGroup.rotation.y += rotation * 0.02;
+        }
+        return "open";
+      }
+      return "unknown";
+    }
+
+    function distance(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const dz = (a.z || 0) - (b.z || 0);
+      return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    function handlePinch() {
+      if (photoGroup.children.length === 0) return;
+      if (pinchFocus) return;
+      pinchFocus = true;
+      const photo = photoGroup.children[activePhotoIndex % photoGroup.children.length];
+      activePhotoIndex++;
+      const targetPos = photo.getWorldPosition(new THREE.Vector3());
+      new TWEEN.Tween(camera.position)
+        .to({ x: targetPos.x, y: targetPos.y + 6, z: targetPos.z + 25 }, 1200)
+        .easing(TWEEN.Easing.Cubic.InOut)
+        .start();
+      new TWEEN.Tween(controls.target)
+        .to({ x: targetPos.x, y: targetPos.y, z: targetPos.z }, 1200)
+        .easing(TWEEN.Easing.Cubic.InOut)
+        .onComplete(() => setStructureState("scatter"))
+        .start();
+      setTimeout(() => (pinchFocus = false), 2000);
+    }
+
+    async function predictHands() {
+      if (!handLandmarker || video.readyState < 2) {
+        requestAnimationFrame(predictHands);
+        return;
+      }
+      const results = handLandmarker.detectForVideo(video, performance.now());
+      if (results.landmarks && results.landmarks.length) {
+        drawLandmarks(results.landmarks[0]);
+        analyzeGesture(results.landmarks[0]);
+      } else {
+        overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+      }
+      requestAnimationFrame(predictHands);
+    }
+
+    initHands();
+
+    // Loading progress helper
+    function updateProgress(value) {
+      const bar = document.getElementById("progressBar");
+      const text = document.getElementById("progressText");
+      bar.style.width = `${value}%`;
+      text.textContent = `加载资源 ${value}%`;
+    }
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      TWEEN.update();
+      updateParticles(delta);
+      dustFloat(delta);
+      if (fireworksPhase) {
+        for (let i = fireworks.length - 1; i >= 0; i--) {
+          const alive = fireworks[i].update(delta);
+          if (!alive) fireworks.splice(i, 1);
+        }
+      }
+      if (cakeGroup.visible) {
+        updateInstances(delta);
+        updatePhotos(delta);
+        controls.update();
+      }
+      if (floatingText) {
+        floatingText.position.y = 120 + Math.sin(performance.now() * 0.0012) * 4;
+      }
+      composer.render();
+    }
+
+    function dustFloat(delta) {
+      const attr = dustGeo.attributes.position;
+      for (let i = 0; i < dustCount; i++) {
+        let y = attr.getY(i);
+        y += Math.sin(performance.now() * 0.001 + i) * dustSpeed[i] * delta * 4;
+        attr.setY(i, y > 120 ? 0 : y);
+      }
+      attr.needsUpdate = true;
+    }
+
+    animate();
+
+    window.addEventListener("resize", () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      composer.setSize(w, h);
+      bloomPass.setSize(w, h);
+      overlay.width = overlay.clientWidth;
+      overlay.height = overlay.clientHeight;
+    });
+</script>
 </body>
 </html>
