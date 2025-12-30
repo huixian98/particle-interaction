@@ -314,17 +314,31 @@
     let modulesLoadingPromise = null;
     
     // 异步加载可选模块
+    async function loadGsapWithFallback() {
+      const sources = [
+        'gsap',
+        'https://cdn.skypack.dev/gsap@3.12.5?min',
+        'https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js'
+      ];
+      for (const src of sources) {
+        try {
+          const module = await import(src);
+          const candidate = module.gsap || module.default || module;
+          if (candidate && typeof candidate.to === 'function') {
+            console.log('GSAP 加载成功，来源:', src);
+            return candidate;
+          }
+        } catch (error) {
+          console.warn(`GSAP 源 ${src} 加载失败:`, error);
+        }
+      }
+      return null;
+    }
+
     modulesLoadingPromise = Promise.allSettled([
       import('@mediapipe/hands').then(m => { Hands = m.Hands; console.log('MediaPipe Hands 加载成功'); }).catch(e => console.warn('MediaPipe Hands 加载失败:', e)),
       import('@mediapipe/camera_utils').then(m => { Camera = m.Camera; console.log('MediaPipe Camera 加载成功'); }).catch(e => console.warn('MediaPipe Camera 加载失败:', e)),
-      import('gsap').then(m => { 
-        // GSAP 可能是默认导出或命名导出
-        gsap = m.gsap || m.default || m;
-        console.log('GSAP 加载成功', gsap ? '对象存在' : '对象不存在');
-      }).catch(e => {
-        console.warn('GSAP 加载失败:', e);
-        gsap = null;
-      })
+      loadGsapWithFallback().then(instance => { gsap = instance; })
     ]).then(() => {
       console.log('所有可选模块加载尝试完成');
       console.log('GSAP 状态:', gsap && typeof gsap.to === 'function' ? '已加载且可用' : '未加载或不可用');
