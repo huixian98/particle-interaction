@@ -29,6 +29,24 @@
       background: #000; /* 确保背景是黑色 */
     }
 
+    #fireworks-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 6;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.6s ease;
+    }
+
+    #fireworks-canvas.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
     #ui-overlay {
       position: fixed;
       top: 0;
@@ -257,6 +275,7 @@
   </div>
 
   <div id="canvas-container"></div>
+  <canvas id="fireworks-canvas"></canvas>
 
   <div id="ui-overlay">
     <div id="status-text"></div>
@@ -316,6 +335,7 @@
     let scene, camera, renderer, composer;
     let particleSystem, instancedMesh;
     let handTracker, cameraVideo, cameraCanvas, cameraCtx;
+    let fireworksCanvas, fireworksEngine;
     let currentPhase = 'intro'; // intro, fireworks, main
     let particleCount = 20000; // 减少粒子数量以提高性能和可见性
     let positions, velocities, targets;
@@ -375,6 +395,26 @@
 
       console.log(`文本 "${text}" 提取了 ${positions.length / 3} 个粒子位置，缩放倍数: ${scaleMultiplier}`);
       return new Float32Array(positions);
+    }
+
+    function getVisibleHeightAtDepth(depth = 0) {
+      if (!camera) {
+        const fallbackFov = THREE.MathUtils.degToRad(55);
+        const fallbackDistance = Math.abs(600 - depth);
+        return 2 * Math.tan(fallbackFov / 2) * Math.max(fallbackDistance, 0.1);
+      }
+      const distance = Math.abs(camera.position.z - depth);
+      const vFov = THREE.MathUtils.degToRad(camera.fov);
+      return 2 * Math.tan(vFov / 2) * Math.max(distance, 0.1);
+    }
+
+    function getVisibleWidthAtDepth(depth = 0) {
+      const height = getVisibleHeightAtDepth(depth);
+      if (camera) {
+        return height * camera.aspect;
+      }
+      const aspect = window.innerWidth / Math.max(window.innerHeight, 1);
+      return height * aspect;
     }
 
     // ==================== 初始化场景 ====================
@@ -762,353 +802,447 @@
       });
     }
 
-    // ==================== 烟花效果 ====================
+    // ==================== Canvas 烟花系统 ====================
+    class FireworksEngine {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.gravity = 540; // px/s^2，对应 0.15px/帧^2
+        this.rockets = [];
+        this.particles = [];
+        this.smokes = [];
+        this.trails = [];
+        this.running = false;
+        this.activeShow = false;
+        this.launchInterval = 420;
+        this.launchAccumulator = 0;
+        this.showTimer = 0;
+        this.duration = 6000;
+        this.lastTime = 0;
+        this.resolveShow = null;
+        this.loop = this.loop.bind(this);
+        this.resize = this.resize.bind(this);
+        this.resize();
+        window.addEventListener('resize', this.resize);
+      }
+
+      resize() {
+        if (!this.canvas) return;
+        this.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.canvas.width = this.width * this.pixelRatio;
+        this.canvas.height = this.height * this.pixelRatio;
+        this.canvas.style.width = `${this.width}px`;
+        this.canvas.style.height = `${this.height}px`;
+        this.ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
+      }
+
+      start() {
+        if (this.running) return;
+        this.running = true;
+        this.lastTime = performance.now();
+        requestAnimationFrame(this.loop);
+      }
+
+      stop(clearCanvas = true) {
+        this.running = false;
+        this.activeShow = false;
+        this.resolveShow?.();
+        this.resolveShow = null;
+        this.rockets = [];
+        this.particles = [];
+        this.smokes = [];
+        this.trails = [];
+        if (clearCanvas && this.ctx) {
+          this.ctx.clearRect(0, 0, this.width, this.height);
+        }
+      }
+
+      playShow(duration = 6500, interval = 420) {
+        this.duration = duration;
+        this.launchInterval = interval;
+        this.launchAccumulator = 0;
+        this.showTimer = 0;
+        this.activeShow = true;
+        if (!this.running) {
+          this.start();
+        }
+        return new Promise(resolve => {
+          this.resolveShow = resolve;
+        });
+      }
+
+      loop(timestamp) {
+        if (!this.running) return;
+        const dt = Math.min(0.05, Math.max(0.016, (timestamp - this.lastTime) / 1000 || 0.016));
+        this.lastTime = timestamp;
+        this.update(dt);
+        this.render();
+        requestAnimationFrame(this.loop);
+      }
+
+      update(dt) {
+        if (this.activeShow) {
+          this.launchAccumulator += dt * 1000;
+          this.showTimer += dt * 1000;
+          if (this.launchAccumulator >= this.launchInterval) {
+            this.launchAccumulator -= this.launchInterval;
+            this.spawnRocket();
+          }
+          if (this.showTimer >= this.duration) {
+            this.activeShow = false;
+          }
+        }
+
+        this.updateRockets(dt);
+        this.updateParticles(dt);
+        this.updateTrails(dt);
+        this.updateSmoke(dt);
+
+        const inactive = !this.activeShow &&
+          this.rockets.length === 0 &&
+          this.particles.length === 0 &&
+          this.smokes.length === 0 &&
+          this.trails.length === 0;
+
+        if (inactive && this.resolveShow) {
+          const resolve = this.resolveShow;
+          this.resolveShow = null;
+          resolve();
+        }
+      }
+
+      spawnRocket() {
+        const launchX = this.width * (0.2 + Math.random() * 0.6);
+        const startY = this.height + 20;
+        const targetProgress = 0.7 + Math.random() * 0.05; // 爆炸在高度 70% 附近
+        const targetY = this.height * (1 - targetProgress);
+        const travel = Math.max(120, startY - targetY);
+        const vy = -Math.sqrt(2 * this.gravity * travel) * (0.9 + Math.random() * 0.15);
+        const horizontalAmplitude = this.width * 0.05;
+        const vx = (Math.random() - 0.5) * horizontalAmplitude / Math.max(0.3, travel / Math.abs(vy));
+
+        const rocket = {
+          x: launchX,
+          y: startY,
+          vx,
+          vy,
+          targetY,
+          color: this.randomColorScheme(),
+          trailTick: 0,
+          exploded: false,
+        };
+
+        this.rockets.push(rocket);
+      }
+
+      randomColorScheme() {
+        const palette = [
+          { layers: ['#fff8d2', '#ffd44d', '#ff9a00'], halo: 'rgba(255,214,0,0.45)', smoke: 'rgba(255,214,153,0.25)' }, // 金色
+          { layers: ['#ffe0e6', '#ff4d4f', '#b3181e'], halo: 'rgba(255,64,64,0.35)', smoke: 'rgba(255,180,180,0.22)' }, // 红色
+          { layers: ['#d5f1ff', '#63b0ff', '#1a62ff'], halo: 'rgba(99,176,255,0.4)', smoke: 'rgba(190,220,255,0.2)' }, // 蓝色
+          { layers: ['#e0ffe2', '#4cff96', '#1c8a4f'], halo: 'rgba(100,255,180,0.35)', smoke: 'rgba(180,255,210,0.18)' }, // 绿色
+          { layers: ['#f0dcff', '#c067ff', '#5a1f91'], halo: 'rgba(160,103,255,0.4)', smoke: 'rgba(220,190,255,0.2)' }, // 紫色
+        ];
+        return palette[Math.floor(Math.random() * palette.length)];
+      }
+
+      updateRockets(dt) {
+        for (let i = this.rockets.length - 1; i >= 0; i--) {
+          const rocket = this.rockets[i];
+          rocket.vy += this.gravity * dt;
+          rocket.x += rocket.vx * dt;
+          rocket.y += rocket.vy * dt;
+          rocket.vx *= 0.995;
+          rocket.trailTick += dt;
+
+          if (rocket.trailTick >= 0.02) {
+            this.trails.push({
+              x: rocket.x,
+              y: rocket.y,
+              alpha: 1,
+              size: 2.6,
+              color: rocket.color.layers[0],
+              life: 0,
+            });
+            rocket.trailTick = 0;
+          }
+
+          const progress = 1 - rocket.y / this.height;
+          const reachedTarget = rocket.y <= rocket.targetY;
+          const passedProgress = progress >= 0.7;
+
+          if ((reachedTarget || passedProgress || rocket.vy >= 0) && !rocket.exploded) {
+            this.createExplosion(rocket);
+            this.rockets.splice(i, 1);
+            continue;
+          }
+
+          if (rocket.y < -100) {
+            this.rockets.splice(i, 1);
+          }
+        }
+      }
+
+      createExplosion(rocket) {
+        const { x, y, color } = rocket;
+        const particleCount = 50 + Math.floor(Math.random() * 50);
+        const speedMin = 30;
+        const speedMax = 80;
+        const baseRGB = this.hexToRgb(color.layers?.[0] || color.layers?.[1] || '#ffffff');
+        for (let i = 0; i < particleCount; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const baseSpeed = speedMin + Math.random() * (speedMax - speedMin); // px/帧
+          const speed = baseSpeed * 60; // 转换为 px/s
+          const vx = Math.cos(angle) * speed;
+          const vy = Math.sin(angle) * speed;
+          const jittered = this.jitterColor(baseRGB, 30);
+          this.particles.push({
+            x,
+            y,
+            prevX: x,
+            prevY: y,
+            vx,
+            vy,
+            baseSize: 4,
+            size: 4,
+            alpha: 0.85,
+            life: 0,
+            lifespan: 1.2 + Math.random() * 0.8,
+            dragFactor: 0.97,
+            color: jittered,
+          });
+        }
+
+        for (let i = 0; i < 30; i++) {
+          this.smokes.push({
+            x: x + (Math.random() - 0.5) * 15,
+            y: y + (Math.random() - 0.5) * 15,
+            vx: (Math.random() - 0.5) * 40,
+            vy: -20 - Math.random() * 20,
+            size: 20 + Math.random() * 30,
+            alpha: 0.35,
+            decay: 0.12 + Math.random() * 0.05,
+            color: color.smoke,
+          });
+        }
+      }
+
+      updateParticles(dt) {
+        const frameRatio = dt / (1 / 60);
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          const drag = Math.pow(p.dragFactor, frameRatio);
+          p.prevX = p.x;
+          p.prevY = p.y;
+          p.vx *= drag;
+          p.vy = p.vy * drag + this.gravity * dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.life += dt;
+          const progress = Math.min(1, p.life / p.lifespan);
+          p.size = Math.max(0, p.baseSize * (1 - progress));
+          p.alpha = Math.max(0, 1 - progress);
+
+          if (p.alpha <= 0 || p.size <= 0) {
+            this.particles.splice(i, 1);
+          }
+        }
+      }
+
+      updateTrails(dt) {
+          for (let i = this.trails.length - 1; i >= 0; i--) {
+            const trail = this.trails[i];
+            trail.life += dt;
+            trail.alpha -= dt * 1.5;
+            trail.size = Math.max(0, trail.size - dt * 1.2);
+            if (trail.alpha <= 0 || trail.size <= 0) {
+              this.trails.splice(i, 1);
+            }
+          }
+      }
+
+      updateSmoke(dt) {
+        for (let i = this.smokes.length - 1; i >= 0; i--) {
+          const smoke = this.smokes[i];
+          smoke.vx *= 0.96;
+          smoke.vy = smoke.vy * 0.96 - 5 * dt;
+          smoke.x += smoke.vx * dt;
+          smoke.y += smoke.vy * dt;
+          smoke.size += dt * 6;
+          smoke.alpha -= dt * smoke.decay;
+          if (smoke.alpha <= 0) {
+            this.smokes.splice(i, 1);
+          }
+        }
+      }
+
+      render() {
+        const ctx = this.ctx;
+        if (!ctx) return;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(0, 0, this.width, this.height);
+
+        ctx.globalCompositeOperation = 'lighter';
+        this.drawTrails(ctx);
+        this.drawRockets(ctx);
+        this.drawParticles(ctx);
+
+        ctx.globalCompositeOperation = 'source-over';
+        this.drawSmoke(ctx);
+      }
+
+      drawRockets(ctx) {
+        this.rockets.forEach(rocket => {
+          const gradient = ctx.createRadialGradient(rocket.x, rocket.y, 0, rocket.x, rocket.y, 12);
+          gradient.addColorStop(0, '#ffffff');
+          gradient.addColorStop(0.4, rocket.color.layers[0]);
+          gradient.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(rocket.x, rocket.y, 12, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      drawParticles(ctx) {
+        this.particles.forEach(p => {
+          const radius = Math.max(0.4, p.size);
+          const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius);
+          const alpha = Math.max(0, p.alpha);
+          gradient.addColorStop(0, this.rgbToString({ ...p.color, a: alpha }));
+          gradient.addColorStop(0.5, this.rgbToString({ ...p.color, a: alpha * 0.6 }));
+          gradient.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (p.prevX !== undefined) {
+            ctx.strokeStyle = this.rgbToString({ ...p.color, a: alpha * 0.4 });
+            ctx.lineWidth = Math.max(0.5, radius * 0.3);
+            ctx.beginPath();
+            ctx.moveTo(p.prevX, p.prevY);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+          }
+        });
+      }
+
+      drawTrails(ctx) {
+        this.trails.forEach(trail => {
+          ctx.fillStyle = this.applyAlpha(trail.color, Math.max(0, trail.alpha));
+          ctx.beginPath();
+          ctx.arc(trail.x, trail.y, Math.max(0.4, trail.size), 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      drawSmoke(ctx) {
+        this.smokes.forEach(smoke => {
+          const gradient = ctx.createRadialGradient(smoke.x, smoke.y, 0, smoke.x, smoke.y, smoke.size);
+          gradient.addColorStop(0, this.applyAlpha(smoke.color || 'rgba(200,200,200,0.3)', smoke.alpha));
+          gradient.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(smoke.x, smoke.y, smoke.size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      applyAlpha(color, alpha) {
+        const clampAlpha = Math.max(0, Math.min(1, alpha));
+        if (color.startsWith('rgba')) {
+          return color.replace(/rgba\(([^)]+),[^)]+\)/, `rgba($1, ${clampAlpha})`);
+        }
+        if (color.startsWith('rgb')) {
+          return color.replace('rgb', 'rgba').replace(')', `, ${clampAlpha})`);
+        }
+        if (color.startsWith('#')) {
+          const hex = color.slice(1);
+          const bigint = parseInt(hex, 16);
+          const r = (bigint >> 16) & 255;
+          const g = (bigint >> 8) & 255;
+          const b = bigint & 255;
+          return `rgba(${r}, ${g}, ${b}, ${clampAlpha})`;
+        }
+        return color;
+      }
+
+      hexToRgb(hex) {
+        if (!hex) return { r: 255, g: 255, b: 255, a: 1 };
+        const normalized = hex.replace('#', '');
+        const bigint = parseInt(normalized.length === 3 ? normalized.replace(/(.)/g, '$1$1') : normalized, 16);
+        return {
+          r: (bigint >> 16) & 255,
+          g: (bigint >> 8) & 255,
+          b: bigint & 255,
+          a: 1,
+        };
+      }
+
+      jitterColor(rgb, amount = 20) {
+        return {
+          r: Math.max(0, Math.min(255, rgb.r + (Math.random() - 0.5) * amount * 2)),
+          g: Math.max(0, Math.min(255, rgb.g + (Math.random() - 0.5) * amount * 2)),
+          b: Math.max(0, Math.min(255, rgb.b + (Math.random() - 0.5) * amount * 2)),
+          a: rgb.a ?? 1,
+        };
+      }
+
+      rgbToString({ r = 255, g = 255, b = 255, a = 1 }) {
+        return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, a))})`;
+      }
+    }
+
+    // ==================== 烟花过场 ====================
     async function fireworksTransition() {
       console.log('开始烟花效果');
       currentPhase = 'fireworks';
-      
-      // 确保粒子系统已隐藏
+
       if (particleSystem) {
         particleSystem.visible = false;
-        console.log('粒子系统已隐藏');
       }
-      
-      // 重置摄像机位置，确保能看到烟花
+
       if (camera) {
         camera.position.set(0, 0, 600);
         camera.lookAt(0, 0, 0);
-        console.log(`摄像机位置已重置: (${camera.position.x}, ${camera.position.y}, ${camera.position.z})`);
-        console.log(`摄像机视野范围: 约 -300 到 300 (Y轴)`);
-      }
-      
-      const fireworkCount = 10; // 增加烟花数量
-      const fireworks = [];
-
-      // 从屏幕底部发射多束烟花，错开时间
-      console.log(`准备发射 ${fireworkCount} 束烟花`);
-      for (let i = 0; i < fireworkCount; i++) {
-        setTimeout(() => {
-          console.log(`发射第 ${i + 1} 束烟花`);
-          createFirework(fireworks);
-        }, i * 250); // 缩短间隔，让烟花更密集
       }
 
-      // 等待所有烟花完成（增加等待时间，让烟花完全绽放）
-      // 每束烟花：上升时间约2秒 + 爆炸持续时间约3秒 = 5秒
-      // 加上发射间隔，总时间约为：发射间隔 * 数量 + 单束持续时间
-      await new Promise(resolve => setTimeout(resolve, fireworkCount * 250 + 6000));
-      
-      console.log('清理烟花');
-      // 清理烟花
-      fireworks.forEach(fw => {
-        if (fw && fw.group) {
-          scene.remove(fw.group);
-          fw.group.traverse(child => {
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) child.material.dispose();
-          });
+      if (!fireworksCanvas) {
+        fireworksCanvas = document.getElementById('fireworks-canvas');
+      }
+      if (!fireworksEngine && fireworksCanvas) {
+        fireworksEngine = new FireworksEngine(fireworksCanvas);
+      }
+
+      if (fireworksCanvas) {
+        fireworksCanvas.classList.add('active');
+      }
+
+      if (fireworksEngine) {
+        try {
+          await fireworksEngine.playShow(7000, 420);
+        } finally {
+          fireworksEngine.stop();
         }
-      });
+      } else {
+        console.warn('Canvas 烟花未初始化，使用备用延迟');
+        await new Promise(resolve => setTimeout(resolve, 4000));
+      }
 
-      // 过渡到主场景
+      if (fireworksCanvas) {
+        fireworksCanvas.classList.remove('active');
+        const ctx = fireworksCanvas.getContext('2d');
+        ctx?.clearRect(0, 0, fireworksCanvas.width, fireworksCanvas.height);
+      }
+
       await transitionToMainScene();
-    }
-
-    function createFirework(fireworksArray) {
-      console.log('创建烟花');
-      const group = new THREE.Group();
-      const trailParticleCount = 80; // 拖尾粒子数
-      const explosionParticleCount = 300; // 爆炸粒子数（增加密度）
-      
-      // 从屏幕底部发射（根据当前摄像机位置调整）
-      // 摄像机在 z=600，视野范围大约 -300 到 300
-      const startY = -300; // 屏幕底部（调整到可见范围）
-      const startX = (Math.random() - 0.5) * 800; // 随机X位置（在可见范围内）
-      const targetY = 100 + Math.random() * 200; // 爆炸高度（在空中，100-300，确保在视野内）
-
-      // 升空拖尾 - 清晰的金色拖尾，从底部集中开始，逐渐散开
-      const trailGeometry = new THREE.BufferGeometry();
-      const trailPositions = new Float32Array(trailParticleCount * 3);
-      const trailVelocities = new Float32Array(trailParticleCount * 3);
-      const trailSpreadFactors = new Float32Array(trailParticleCount); // 每个粒子的散开因子
-
-      for (let i = 0; i < trailParticleCount; i++) {
-        const idx = i * 3;
-        // 初始位置：底部集中，形成明显的拖尾效果
-        // 让粒子在底部更集中，向上逐渐散开
-        const verticalOffset = (i / trailParticleCount) * 50; // 初始拖尾长度（向上延伸，增加长度）
-        const baseSpread = 3; // 底部基础分散度（更集中）
-        const topSpread = 300; // 顶部最大分散度（更散开）
-        const spread = baseSpread + (i / trailParticleCount) * (topSpread - baseSpread);
-        
-        // 使用更明显的分散，确保拖尾可见
-        const randomX = (Math.random() - 0.5) * spread;
-        const randomZ = (Math.random() - 0.5) * spread * 0.6; // Z轴分散度较小
-        
-        trailPositions[idx] = startX + randomX;
-        trailPositions[idx + 1] = startY + verticalOffset; // 从底部向上延伸
-        trailPositions[idx + 2] = randomZ;
-
-        // 初始速度：上升为主，横向逐渐增加散开速度
-        // 大幅增加上升速度，让拖尾更明显
-        const baseHorizontalSpeed = 0.8;
-        const topHorizontalSpeed = 3.0;
-        const horizontalSpeed = baseHorizontalSpeed + (i / trailParticleCount) * (topHorizontalSpeed - baseHorizontalSpeed);
-        
-        trailVelocities[idx] = (Math.random() - 0.5) * horizontalSpeed;
-        trailVelocities[idx + 1] = 10 + Math.random() * 5; // 大幅增加上升速度（10-15）
-        trailVelocities[idx + 2] = (Math.random() - 0.5) * horizontalSpeed;
-        
-        // 记录每个粒子的散开因子（用于持续散开）
-        trailSpreadFactors[i] = 0.7 + Math.random() * 0.3; // 0.7-1.0 的散开速度
-      }
-
-      const trailMaterial = new THREE.PointsMaterial({
-        size: 12, // 进一步增大拖尾粒子，更清晰可见
-        color: 0xffd700, // 金色
-        transparent: true,
-        opacity: 1.0,
-        blending: THREE.AdditiveBlending,
-        sizeAttenuation: true,
-        depthWrite: false,
-      });
-
-      const trail = new THREE.Points(trailGeometry, trailMaterial);
-      trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
-      group.add(trail);
-
-      // 爆炸粒子 - 多色、密集、清晰
-      const explosionGeometry = new THREE.BufferGeometry();
-      const explosionPositions = new Float32Array(explosionParticleCount * 3);
-      const explosionVelocities = new Float32Array(explosionParticleCount * 3);
-      const explosionColors = new Float32Array(explosionParticleCount * 3); // 颜色数组
-
-      // 丰富的颜色方案：白色、金色、银色、蓝色、青色、粉色、紫色、红色、橙色、黄色
-      const colorPalette = [
-        [1.0, 1.0, 1.0],   // 白色
-        [1.0, 0.84, 0.0],  // 金色
-        [0.9, 0.9, 0.95],  // 银色
-        [0.3, 0.6, 1.0],   // 蓝色
-        [0.0, 0.8, 1.0],   // 青色
-        [1.0, 0.5, 0.8],   // 粉色
-        [0.8, 0.4, 1.0],   // 紫色
-        [1.0, 0.2, 0.2],   // 红色
-        [1.0, 0.6, 0.0],   // 橙色
-        [1.0, 1.0, 0.3],   // 黄色
-      ];
-
-      for (let i = 0; i < explosionParticleCount; i++) {
-        const idx = i * 3;
-        // 爆炸中心位置
-        const explosionX = startX;
-        const explosionY = targetY;
-        const explosionZ = (Math.random() - 0.5) * 50; // Z轴稍微分散
-        
-        explosionPositions[idx] = explosionX;
-        explosionPositions[idx + 1] = explosionY;
-        explosionPositions[idx + 2] = explosionZ;
-
-        // 球面爆炸分布（更均匀的分布）
-        // 使用更均匀的角度分布，确保粒子向各个方向散开
-        const theta = (Math.PI * 2 * i) / explosionParticleCount + (Math.random() - 0.5) * 0.5; // 角度稍微随机化
-        const phi = Math.acos(1 - 2 * Math.random()); // 均匀的球面分布
-        const speed = 8 + Math.random() * 10; // 大幅增加爆炸速度（8-18），让散开更明显
-        
-        // 球坐标转笛卡尔坐标
-        explosionVelocities[idx] = Math.sin(phi) * Math.cos(theta) * speed;
-        explosionVelocities[idx + 1] = Math.cos(phi) * speed;
-        explosionVelocities[idx + 2] = Math.sin(phi) * Math.sin(theta) * speed;
-
-        // 随机选择颜色（更丰富的颜色）
-        const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
-        explosionColors[idx] = color[0];
-        explosionColors[idx + 1] = color[1];
-        explosionColors[idx + 2] = color[2];
-      }
-
-      const explosionMaterial = new THREE.PointsMaterial({
-        size: 10, // 进一步增大爆炸粒子，更清晰可见
-        vertexColors: true, // 使用顶点颜色
-        transparent: true,
-        opacity: 1.0,
-        blending: THREE.AdditiveBlending,
-        sizeAttenuation: true,
-        depthWrite: false,
-      });
-
-      const explosion = new THREE.Points(explosionGeometry, explosionMaterial);
-      explosionGeometry.setAttribute('position', new THREE.BufferAttribute(explosionPositions, 3));
-      explosionGeometry.setAttribute('color', new THREE.BufferAttribute(explosionColors, 3));
-      explosion.visible = false; // 初始隐藏，爆炸时显示
-      group.add(explosion);
-      
-      // 确保拖尾初始可见
-      trail.visible = true;
-      console.log(`拖尾可见: ${trail.visible}, 爆炸可见: ${explosion.visible}`);
-
-      scene.add(group);
-      console.log(`烟花已添加到场景，位置: (${startX}, ${startY}), 目标高度: ${targetY}`);
-      console.log(`场景子对象数量: ${scene.children.length}`);
-      console.log(`拖尾粒子数: ${trailParticleCount}, 爆炸粒子数: ${explosionParticleCount}`);
-
-      const firework = {
-        group,
-        trail,
-        explosion,
-        trailGeometry,
-        explosionGeometry,
-        trailMaterial,
-        explosionMaterial,
-        trailPositions,
-        trailVelocities,
-        trailSpreadFactors, // 添加散开因子
-        explosionPositions,
-        explosionVelocities,
-        trailParticleCount,
-        explosionParticleCount,
-        targetY,
-        time: 0,
-        exploded: false,
-        explosionStartTime: 0 // 记录爆炸开始时间
-      };
-
-      fireworksArray.push(firework);
-
-      // 动画 - 增强物理效果
-      function animateFirework() {
-        if (!firework.group || !firework.group.parent) {
-          // 如果烟花已被移除，停止动画
-          return;
-        }
-        
-        const dt = 0.016; // 固定时间步长
-        firework.time += dt;
-
-        if (!firework.exploded) {
-          // 升空阶段 - 拖尾效果，持续上升并逐渐散开
-          let maxY = -Infinity;
-          const ascentTime = 1.8; // 上升时间（秒）
-          const ascentProgress = Math.min(1, firework.time / ascentTime);
-          
-          // 升空阶段的物理参数
-          const trailGravity = -0.1; // 轻微重力影响（拖尾粒子受重力影响较小）
-          const trailAirResistance = 0.995; // 拖尾空气阻力（很小，保持上升和散开）
-          
-          for (let i = 0; i < firework.trailParticleCount; i++) {
-            const idx = i * 3;
-            
-            // 持续增加横向散开速度（模拟烟花上升时的扩散）
-            // 大幅增加散开加速度，让拖尾更明显
-            const spreadAcceleration = 3.0 * firework.trailSpreadFactors[i] * (1 + ascentProgress * 2);
-            firework.trailVelocities[idx] += (Math.random() - 0.5) * spreadAcceleration * dt;
-            firework.trailVelocities[idx + 2] += (Math.random() - 0.5) * spreadAcceleration * dt;
-            
-            // 应用重力（轻微影响，主要影响上升速度）
-            firework.trailVelocities[idx + 1] += trailGravity * dt;
-            
-            // 应用空气阻力（保持上升，但允许横向散开）
-            firework.trailVelocities[idx] *= trailAirResistance;
-            firework.trailVelocities[idx + 1] *= trailAirResistance;
-            firework.trailVelocities[idx + 2] *= trailAirResistance;
-            
-            // 更新位置（关键：必须在应用物理效果后更新）
-            firework.trailPositions[idx] += firework.trailVelocities[idx] * dt;
-            firework.trailPositions[idx + 1] += firework.trailVelocities[idx + 1] * dt;
-            firework.trailPositions[idx + 2] += firework.trailVelocities[idx + 2] * dt;
-
-            // 拖尾粒子逐渐淡出（越往上越淡，但保持可见）
-            const trailOpacity = 1 - ascentProgress * 0.15; // 最多淡出15%，保持可见性
-            firework.trailMaterial.opacity = Math.max(0.85, trailOpacity);
-
-            // 跟踪最高点
-            if (firework.trailPositions[idx + 1] > maxY) {
-              maxY = firework.trailPositions[idx + 1];
-            }
-          }
-          
-          firework.trailGeometry.attributes.position.needsUpdate = true;
-
-          // 检查是否到达目标高度
-          if (maxY >= firework.targetY && !firework.exploded) {
-            firework.exploded = true;
-            firework.trail.visible = false;
-            firework.explosion.visible = true;
-            
-            // 确保爆炸粒子从正确的位置开始
-            const explosionX = startX;
-            const explosionY = maxY; // 使用实际到达的最高点
-            for (let i = 0; i < firework.explosionParticleCount; i++) {
-              const idx = i * 3;
-              firework.explosionPositions[idx] = explosionX;
-              firework.explosionPositions[idx + 1] = explosionY;
-              firework.explosionPositions[idx + 2] = (Math.random() - 0.5) * 50;
-            }
-            firework.explosionGeometry.attributes.position.needsUpdate = true;
-            
-            // 重置爆炸阶段的时间（从0开始计算淡出）
-            firework.explosionStartTime = firework.time;
-            
-            console.log(`烟花爆炸！位置: (${explosionX}, ${explosionY})`);
-          }
-        } else {
-          // 爆炸阶段 - 增强物理效果（重力、阻力）
-          const gravity = -0.3; // 增强重力加速度，让粒子下落更明显
-          const airResistance = 0.96; // 空气阻力（稍微减小，让粒子散开更远）
-          
-          // 计算爆炸后的时间
-          const explosionTime = firework.time - (firework.explosionStartTime || firework.time);
-          
-          for (let i = 0; i < firework.explosionParticleCount; i++) {
-            const idx = i * 3;
-            
-            // 先更新位置（基于当前速度）
-            firework.explosionPositions[idx] += firework.explosionVelocities[idx] * dt;
-            firework.explosionPositions[idx + 1] += firework.explosionVelocities[idx + 1] * dt;
-            firework.explosionPositions[idx + 2] += firework.explosionVelocities[idx + 2] * dt;
-            
-            // 应用重力（持续影响Y轴速度）
-            firework.explosionVelocities[idx + 1] += gravity * dt;
-            
-            // 应用空气阻力（所有方向）
-            firework.explosionVelocities[idx] *= airResistance;
-            firework.explosionVelocities[idx + 1] *= airResistance;
-            firework.explosionVelocities[idx + 2] *= airResistance;
-            
-            // 粒子大小随速度衰减（快速移动的粒子更大）
-            const speed = Math.sqrt(
-              firework.explosionVelocities[idx] * firework.explosionVelocities[idx] +
-              firework.explosionVelocities[idx + 1] * firework.explosionVelocities[idx + 1] +
-              firework.explosionVelocities[idx + 2] * firework.explosionVelocities[idx + 2]
-            );
-            // 速度越快，粒子越大（但会随时间衰减）
-            const sizeMultiplier = Math.max(0.4, Math.min(1.8, speed * 0.15));
-            
-            // 逐渐淡出（基于爆炸后的时间）
-            const fadeStart = 0.5; // 0.5秒后开始淡出
-            const fadeDuration = 3.0; // 3秒完全淡出
-            let fadeProgress = 0;
-            if (explosionTime > fadeStart) {
-              fadeProgress = Math.min(1, (explosionTime - fadeStart) / fadeDuration);
-            }
-            firework.explosionMaterial.opacity = Math.max(0, (1 - fadeProgress) * sizeMultiplier);
-          }
-          
-          firework.explosionGeometry.attributes.position.needsUpdate = true;
-        }
-
-        // 继续动画直到完全消失
-        if (!firework.exploded || firework.explosionMaterial.opacity > 0) {
-          requestAnimationFrame(animateFirework);
-        } else {
-          if (firework.group && firework.group.parent) {
-            scene.remove(firework.group);
-          }
-        }
-      }
-
-      // 立即启动动画
-      console.log('启动烟花动画');
-      animateFirework();
     }
 
     // ==================== 主场景：数字蛋糕 ====================
