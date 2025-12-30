@@ -802,7 +802,146 @@
       });
     }
 
-    // ==================== Canvas 烟花系统 ====================
+        // ==================== Canvas 烟花系统 ====================
+    function clampColor(value) {
+      return Math.max(0, Math.min(255, value));
+    }
+
+    function hexToRgbColor(hex) {
+      if (!hex) return { r: 255, g: 255, b: 255 };
+      const normalized = hex.replace('#', '');
+      const expanded = normalized.length === 3 ? normalized.replace(/(.)/g, '$1$1') : normalized;
+      const bigint = parseInt(expanded, 16);
+      return {
+        r: clampColor((bigint >> 16) & 255),
+        g: clampColor((bigint >> 8) & 255),
+        b: clampColor(bigint & 255)
+      };
+    }
+
+    function jitterRgb(rgb, amount = 20) {
+      return {
+        r: clampColor(rgb.r + (Math.random() - 0.5) * amount * 2),
+        g: clampColor(rgb.g + (Math.random() - 0.5) * amount * 2),
+        b: clampColor(rgb.b + (Math.random() - 0.5) * amount * 2)
+      };
+    }
+
+    function rgbToString(rgb, alpha = 1) {
+      return `rgba(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)}, ${Math.max(0, Math.min(1, alpha))})`;
+    }
+
+    class FireworkParticle {
+      constructor(engine) {
+        this.engine = engine;
+        this.active = false;
+      }
+
+      init(config) {
+        this.x = config.x;
+        this.y = config.y;
+        this.prevX = this.x;
+        this.prevY = this.y;
+        this.vx = config.vx;
+        this.vy = config.vy;
+        this.baseSize = config.size || 3;
+        this.size = this.baseSize;
+        this.alpha = config.alpha ?? 1;
+        this.life = 0;
+        this.lifespan = config.lifespan || 1.5;
+        this.gravity = (config.gravity ?? 0.12) * 3600;
+        this.resistance = config.resistance ?? 0.98;
+        this.decay = config.decay ?? 0.02;
+        this.shrink = config.shrink ?? 0.96;
+        this.color = config.color || { r: 255, g: 255, b: 255 };
+        this.trailTimer = 0;
+        this.allowReburst = config.allowReburst ?? false;
+        this.reburstTriggered = false;
+        this.flicker = Math.random() < 0.4;
+        this.active = true;
+        return this;
+      }
+
+      update(dt) {
+        const frameRatio = dt / (1 / 60);
+        const resistance = Math.pow(this.resistance, frameRatio);
+        this.prevX = this.x;
+        this.prevY = this.y;
+        this.vx *= resistance;
+        this.vy = this.vy * resistance + this.gravity * dt;
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.life += dt;
+
+        const shrink = Math.pow(this.shrink, frameRatio);
+        this.size = Math.max(0, this.size * shrink);
+        this.alpha -= this.decay * frameRatio;
+        if (this.flicker && Math.random() < 0.25) {
+          this.alpha += 0.08 * Math.random();
+        }
+        this.alpha = Math.min(1, Math.max(0, this.alpha));
+
+        if (
+          this.allowReburst &&
+          !this.reburstTriggered &&
+          this.life > this.lifespan * 0.35 &&
+          Math.random() < 0.02
+        ) {
+          this.reburstTriggered = true;
+          this.engine.createSubExplosion(this.x, this.y, this.color);
+        }
+
+        this.trailTimer += dt;
+        if (this.trailTimer > 0.02) {
+          this.engine.trails.push({
+            x: this.x,
+            y: this.y,
+            alpha: this.alpha * 0.7,
+            size: Math.max(0.4, this.size * 0.6),
+            decay: 2.2,
+            color: rgbToString(this.color, 0.55)
+          });
+          this.trailTimer = 0;
+        }
+
+        if (
+          this.alpha <= 0 ||
+          this.size <= 0.12 ||
+          this.y > this.engine.height + 150 ||
+          this.x < -150 ||
+          this.x > this.engine.width + 150
+        ) {
+          this.release();
+          return false;
+        }
+
+        return true;
+      }
+
+      draw(ctx) {
+        const radius = Math.max(0.4, this.size * 1.5);
+        const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, radius);
+        gradient.addColorStop(0, `rgba(255,255,255,${Math.min(1, this.alpha + 0.25)})`);
+        gradient.addColorStop(0.35, rgbToString(this.color, Math.min(1, this.alpha)));
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = rgbToString(this.color, this.alpha * 0.4);
+        ctx.lineWidth = Math.max(0.4, radius * 0.25);
+        ctx.beginPath();
+        ctx.moveTo(this.prevX, this.prevY);
+        ctx.lineTo(this.x, this.y);
+        ctx.stroke();
+      }
+
+      release() {
+        this.active = false;
+        this.engine.particlePool.push(this);
+      }
+    }
     class FireworksEngine {
       constructor(canvas) {
         this.canvas = canvas;
@@ -810,23 +949,40 @@
         this.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
         this.width = window.innerWidth;
         this.height = window.innerHeight;
-        this.gravity = 540; // px/s^2，对应 0.15px/帧^2
         this.rockets = [];
         this.particles = [];
-        this.smokes = [];
         this.trails = [];
+        this.smokes = [];
+        this.coreFlashes = [];
+        this.screenFlash = 0;
+        this.particlePool = [];
+        this.maxParticles = 1600;
+        this.maxFireworks = 10;
         this.running = false;
         this.activeShow = false;
-        this.launchInterval = 420;
-        this.launchAccumulator = 0;
-        this.showTimer = 0;
+        this.launchTimer = 0;
+        this.nextLaunchDelay = this.randomLaunchDelay();
         this.duration = 6000;
-        this.lastTime = 0;
+        this.elapsed = 0;
         this.resolveShow = null;
+        this.lastTime = 0;
+        this.stars = [];
+        this.themeBase = [
+          { colors: ['#ffffff', '#ffd700', '#ffa500', '#ff8c00'], smoke: 'rgba(255, 210, 130, 0.2)' },
+          { colors: ['#ffffff', '#ff0000', '#ff4500', '#b22222'], smoke: 'rgba(255, 120, 120, 0.2)' },
+          { colors: ['#ffffff', '#1e90ff', '#00bfff', '#4169e1'], smoke: 'rgba(140, 190, 255, 0.18)' },
+          { colors: ['#ffffff', '#32cd32', '#00ff00', '#228b22'], smoke: 'rgba(180, 255, 200, 0.16)' },
+          { colors: ['#ffffff', '#9370db', '#ba55d3', '#8a2be2'], smoke: 'rgba(210, 180, 255, 0.2)' }
+        ];
+        this.themePool = [];
         this.loop = this.loop.bind(this);
         this.resize = this.resize.bind(this);
         this.resize();
         window.addEventListener('resize', this.resize);
+      }
+
+      randomLaunchDelay() {
+        return 200 + Math.random() * 600;
       }
 
       resize() {
@@ -839,6 +995,17 @@
         this.canvas.style.width = `${this.width}px`;
         this.canvas.style.height = `${this.height}px`;
         this.ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
+        this.generateStars();
+      }
+
+      generateStars() {
+        const count = 150;
+        this.stars = Array.from({ length: count }, () => ({
+          x: Math.random() * this.width,
+          y: Math.random() * this.height,
+          size: Math.random() * 2 + 0.5,
+          alpha: 0.2 + Math.random() * 0.4
+        }));
       }
 
       start() {
@@ -855,19 +1022,22 @@
         this.resolveShow = null;
         this.rockets = [];
         this.particles = [];
-        this.smokes = [];
         this.trails = [];
+        this.smokes = [];
+        this.coreFlashes = [];
+        this.screenFlash = 0;
         if (clearCanvas && this.ctx) {
           this.ctx.clearRect(0, 0, this.width, this.height);
         }
       }
 
-      playShow(duration = 6500, interval = 420) {
+      playShow(duration = 6500) {
         this.duration = duration;
-        this.launchInterval = interval;
-        this.launchAccumulator = 0;
-        this.showTimer = 0;
+        this.elapsed = 0;
+        this.launchTimer = 0;
+        this.nextLaunchDelay = this.randomLaunchDelay();
         this.activeShow = true;
+        this.launchBurst(5);
         if (!this.running) {
           this.start();
         }
@@ -876,7 +1046,20 @@
         });
       }
 
-      loop(timestamp) {
+      launchBurst(count) {
+    const lanes = Math.min(count, this.maxFireworks);
+    for (let i = 0; i < lanes; i++) {
+      const delay = Math.random() * 300 + i * 80;
+      setTimeout(() => {
+        if (!this.running && !this.activeShow) return;
+        const laneWidth = this.width / (lanes + 1);
+        const preferredX = laneWidth * (i + 1) + (Math.random() - 0.5) * laneWidth * 0.3;
+        this.spawnRocket(preferredX);
+      }, delay);
+    }
+  }
+
+  loop(timestamp) {
         if (!this.running) return;
         const dt = Math.min(0.05, Math.max(0.016, (timestamp - this.lastTime) / 1000 || 0.016));
         this.lastTime = timestamp;
@@ -887,13 +1070,14 @@
 
       update(dt) {
         if (this.activeShow) {
-          this.launchAccumulator += dt * 1000;
-          this.showTimer += dt * 1000;
-          if (this.launchAccumulator >= this.launchInterval) {
-            this.launchAccumulator -= this.launchInterval;
+          this.launchTimer += dt * 1000;
+          this.elapsed += dt * 1000;
+          if (this.launchTimer >= this.nextLaunchDelay) {
+            this.launchTimer = 0;
+            this.nextLaunchDelay = this.randomLaunchDelay();
             this.spawnRocket();
           }
-          if (this.showTimer >= this.duration) {
+          if (this.elapsed >= this.duration) {
             this.activeShow = false;
           }
         }
@@ -902,12 +1086,13 @@
         this.updateParticles(dt);
         this.updateTrails(dt);
         this.updateSmoke(dt);
+        this.updateCoreFlashes(dt);
 
         const inactive = !this.activeShow &&
           this.rockets.length === 0 &&
           this.particles.length === 0 &&
-          this.smokes.length === 0 &&
-          this.trails.length === 0;
+          this.trails.length === 0 &&
+          this.smokes.length === 0;
 
         if (inactive && this.resolveShow) {
           const resolve = this.resolveShow;
@@ -916,237 +1101,300 @@
         }
       }
 
-      spawnRocket() {
-        const launchX = this.width * (0.2 + Math.random() * 0.6);
-        const startY = this.height + 20;
-        const targetProgress = 0.7 + Math.random() * 0.05; // 爆炸在高度 70% 附近
-        const targetY = this.height * (1 - targetProgress);
-        const travel = Math.max(120, startY - targetY);
-        const vy = -Math.sqrt(2 * this.gravity * travel) * (0.9 + Math.random() * 0.15);
-        const horizontalAmplitude = this.width * 0.05;
-        const vx = (Math.random() - 0.5) * horizontalAmplitude / Math.max(0.3, travel / Math.abs(vy));
-
-        const rocket = {
+      spawnRocket(preferredX) {
+        if (this.rockets.length >= this.maxFireworks) return;
+        const launchX = typeof preferredX === 'number'
+          ? preferredX
+          : this.width * (0.25 + Math.random() * 0.5);
+        const startY = this.height + 30;
+        const targetY = this.height * 0.3 + Math.random() * this.height * 0.1;
+        const travel = startY - targetY;
+        const vy = -Math.sqrt(2 * 520 * travel);
+        const theme = this.randomColorTheme();
+        this.rockets.push({
           x: launchX,
           y: startY,
-          vx,
+          vx: (Math.random() - 0.5) * 80,
           vy,
+          life: 0,
           targetY,
-          color: this.randomColorScheme(),
-          trailTick: 0,
+          theme,
+          wobbleSeed: Math.random() * Math.PI * 2,
           exploded: false,
-        };
-
-        this.rockets.push(rocket);
+          trailTick: 0
+        });
       }
 
-      randomColorScheme() {
-        const palette = [
-          { layers: ['#fff8d2', '#ffd44d', '#ff9a00'], halo: 'rgba(255,214,0,0.45)', smoke: 'rgba(255,214,153,0.25)' }, // 金色
-          { layers: ['#ffe0e6', '#ff4d4f', '#b3181e'], halo: 'rgba(255,64,64,0.35)', smoke: 'rgba(255,180,180,0.22)' }, // 红色
-          { layers: ['#d5f1ff', '#63b0ff', '#1a62ff'], halo: 'rgba(99,176,255,0.4)', smoke: 'rgba(190,220,255,0.2)' }, // 蓝色
-          { layers: ['#e0ffe2', '#4cff96', '#1c8a4f'], halo: 'rgba(100,255,180,0.35)', smoke: 'rgba(180,255,210,0.18)' }, // 绿色
-          { layers: ['#f0dcff', '#c067ff', '#5a1f91'], halo: 'rgba(160,103,255,0.4)', smoke: 'rgba(220,190,255,0.2)' }, // 紫色
+      randomColorTheme() {
+        const themes = [
+          { colors: ['#ffffff', '#ffd700', '#ffa500', '#ff8c00'], smoke: 'rgba(255, 210, 130, 0.2)' },
+          { colors: ['#ffffff', '#ff0000', '#ff4500', '#b22222'], smoke: 'rgba(255, 120, 120, 0.2)' },
+          { colors: ['#ffffff', '#1e90ff', '#00bfff', '#4169e1'], smoke: 'rgba(140, 190, 255, 0.18)' },
+          { colors: ['#ffffff', '#32cd32', '#00ff00', '#228b22'], smoke: 'rgba(180, 255, 200, 0.16)' },
+          { colors: ['#ffffff', '#9370db', '#ba55d3', '#8a2be2'], smoke: 'rgba(210, 180, 255, 0.2)' }
         ];
-        return palette[Math.floor(Math.random() * palette.length)];
+        return themes[Math.floor(Math.random() * themes.length)];
       }
-
       updateRockets(dt) {
         for (let i = this.rockets.length - 1; i >= 0; i--) {
           const rocket = this.rockets[i];
-          rocket.vy += this.gravity * dt;
+          rocket.life += dt;
+          rocket.vy += 120 * dt;
+          rocket.vx += Math.sin(rocket.life * 6 + rocket.wobbleSeed) * 10 * dt;
           rocket.x += rocket.vx * dt;
           rocket.y += rocket.vy * dt;
-          rocket.vx *= 0.995;
           rocket.trailTick += dt;
 
-          if (rocket.trailTick >= 0.02) {
+          if (rocket.trailTick >= 0.015) {
             this.trails.push({
               x: rocket.x,
               y: rocket.y,
               alpha: 1,
-              size: 2.6,
-              color: rocket.color.layers[0],
-              life: 0,
+              size: 2.5,
+              decay: 3,
+              color: rgbToString(hexToRgbColor(rocket.theme.colors[1]), 0.9)
             });
             rocket.trailTick = 0;
           }
 
-          const progress = 1 - rocket.y / this.height;
-          const reachedTarget = rocket.y <= rocket.targetY;
-          const passedProgress = progress >= 0.7;
-
-          if ((reachedTarget || passedProgress || rocket.vy >= 0) && !rocket.exploded) {
-            this.createExplosion(rocket);
+          if ((rocket.y <= rocket.targetY || rocket.vy >= 0) && !rocket.exploded) {
+            this.createExplosion(rocket.x, rocket.y, rocket.theme);
             this.rockets.splice(i, 1);
-            continue;
-          }
-
-          if (rocket.y < -100) {
+          } else if (rocket.y < -50) {
             this.rockets.splice(i, 1);
           }
         }
       }
 
-      createExplosion(rocket) {
-        const { x, y, color } = rocket;
-        const particleCount = 50 + Math.floor(Math.random() * 50);
-        const speedMin = 30;
-        const speedMax = 80;
-        const baseRGB = this.hexToRgb(color.layers?.[0] || color.layers?.[1] || '#ffffff');
-        for (let i = 0; i < particleCount; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const baseSpeed = speedMin + Math.random() * (speedMax - speedMin); // px/帧
-          const speed = baseSpeed * 60; // 转换为 px/s
-          const vx = Math.cos(angle) * speed;
-          const vy = Math.sin(angle) * speed;
-          const jittered = this.jitterColor(baseRGB, 30);
-          this.particles.push({
+      getParticle(config) {
+        const pooled = this.particlePool.pop();
+        const particle = (pooled || new FireworkParticle(this)).init(config);
+        if (this.particles.length < this.maxParticles) {
+          this.particles.push(particle);
+        }
+      }
+
+      spawnParticleLayer(x, y, options) {
+        const {
+          count,
+          speed,
+          size,
+          gravity,
+          resistance,
+          lifespan,
+          colors,
+          allowReburst
+        } = options;
+
+        for (let i = 0; i < count; i++) {
+          const theta = Math.random() * Math.PI * 2;
+          const bias = Math.pow(Math.random(), 0.35);
+          const speedPerFrame = speed[0] + (speed[1] - speed[0]) * bias;
+          const velocity = speedPerFrame * 60;
+          const vx = Math.cos(theta) * velocity;
+          const vy = Math.sin(theta) * velocity;
+          const sizeValue = size[0] + Math.random() * (size[1] - size[0]);
+          const resistanceValue = resistance[0] + Math.random() * (resistance[1] - resistance[0]);
+          const lifespanValue = lifespan[0] + Math.random() * (lifespan[1] - lifespan[0]);
+          const color = jitterRgb(colors[Math.floor(Math.random() * colors.length)]);
+          this.getParticle({
             x,
             y,
-            prevX: x,
-            prevY: y,
             vx,
             vy,
-            baseSize: 4,
-            size: 4,
-            alpha: 0.85,
-            life: 0,
-            lifespan: 1.2 + Math.random() * 0.8,
-            dragFactor: 0.97,
-            color: jittered,
-          });
-        }
-
-        for (let i = 0; i < 30; i++) {
-          this.smokes.push({
-            x: x + (Math.random() - 0.5) * 15,
-            y: y + (Math.random() - 0.5) * 15,
-            vx: (Math.random() - 0.5) * 40,
-            vy: -20 - Math.random() * 20,
-            size: 20 + Math.random() * 30,
-            alpha: 0.35,
-            decay: 0.12 + Math.random() * 0.05,
-            color: color.smoke,
+            size: sizeValue,
+            lifespan: lifespanValue,
+            gravity,
+            resistance: resistanceValue,
+            color,
+            allowReburst: allowReburst && Math.random() < 0.4,
+            shrink: 0.95 + Math.random() * 0.02,
+            decay: 0.01 + Math.random() * 0.02
           });
         }
       }
 
-      updateParticles(dt) {
-        const frameRatio = dt / (1 / 60);
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-          const p = this.particles[i];
-          const drag = Math.pow(p.dragFactor, frameRatio);
-          p.prevX = p.x;
-          p.prevY = p.y;
-          p.vx *= drag;
-          p.vy = p.vy * drag + this.gravity * dt;
-          p.x += p.vx * dt;
-          p.y += p.vy * dt;
-          p.life += dt;
-          const progress = Math.min(1, p.life / p.lifespan);
-          p.size = Math.max(0, p.baseSize * (1 - progress));
-          p.alpha = Math.max(0, 1 - progress);
+      createExplosion(x, y, theme) {
+        const palette = theme.colors.map(hexToRgbColor);
+        this.coreFlashes.push({ x, y, radius: 8, alpha: 0.85, life: 0 });
+        this.screenFlash = Math.min(0.12, this.screenFlash + 0.06);
 
-          if (p.alpha <= 0 || p.size <= 0) {
+        this.spawnParticleLayer(x, y, {
+          count: 40,
+          speed: [80, 120],
+          size: [3, 5],
+          gravity: 0.12,
+          resistance: [0.97, 0.98],
+          lifespan: [1.2, 1.6],
+          colors: palette.slice(0, 3),
+          allowReburst: true
+        });
+
+        this.spawnParticleLayer(x, y, {
+          count: 60,
+          speed: [40, 80],
+          size: [1.5, 3],
+          gravity: 0.13,
+          resistance: [0.975, 0.985],
+          lifespan: [1.4, 1.9],
+          colors: palette.slice(1),
+          allowReburst: false
+        });
+
+        this.spawnParticleLayer(x, y, {
+          count: 25,
+          speed: [20, 50],
+          size: [1, 2],
+          gravity: 0.15,
+          resistance: [0.985, 0.99],
+          lifespan: [1.8, 2.4],
+          colors: [palette[palette.length - 1]],
+          allowReburst: false
+        });
+
+        for (let i = 0; i < 35; i++) {
+          this.smokes.push({
+            x: x + (Math.random() - 0.5) * 30,
+            y: y + (Math.random() - 0.5) * 30,
+            vx: (Math.random() - 0.5) * 40,
+            vy: -20 - Math.random() * 30,
+            alpha: 0.3,
+            decay: 0.16 + Math.random() * 0.05,
+            size: 20 + Math.random() * 30,
+            color: theme.smoke
+          });
+        }
+      }
+
+      createSubExplosion(x, y, baseColor) {
+        const palette = [baseColor, hexToRgbColor('#ffffff')];
+        this.spawnParticleLayer(x, y, {
+          count: 18 + Math.floor(Math.random() * 15),
+          speed: [25, 55],
+          size: [1, 2.5],
+          gravity: 0.12,
+          resistance: [0.975, 0.985],
+          lifespan: [0.8, 1.2],
+          colors: palette,
+          allowReburst: false
+        });
+      }
+      updateParticles(dt) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const particle = this.particles[i];
+          if (!particle.update(dt)) {
             this.particles.splice(i, 1);
           }
         }
       }
 
       updateTrails(dt) {
-          for (let i = this.trails.length - 1; i >= 0; i--) {
-            const trail = this.trails[i];
-            trail.life += dt;
-            trail.alpha -= dt * 1.5;
-            trail.size = Math.max(0, trail.size - dt * 1.2);
-            if (trail.alpha <= 0 || trail.size <= 0) {
-              this.trails.splice(i, 1);
-            }
+        for (let i = this.trails.length - 1; i >= 0; i--) {
+          const trail = this.trails[i];
+          trail.alpha -= dt * trail.decay;
+          trail.size = Math.max(0, trail.size - dt * 2.5);
+          if (trail.alpha <= 0 || trail.size <= 0) {
+            this.trails.splice(i, 1);
           }
+        }
       }
 
       updateSmoke(dt) {
         for (let i = this.smokes.length - 1; i >= 0; i--) {
           const smoke = this.smokes[i];
-          smoke.vx *= 0.96;
-          smoke.vy = smoke.vy * 0.96 - 5 * dt;
+          smoke.vx *= 0.98;
+          smoke.vy = smoke.vy * 0.98 - 5 * dt;
           smoke.x += smoke.vx * dt;
           smoke.y += smoke.vy * dt;
-          smoke.size += dt * 6;
-          smoke.alpha -= dt * smoke.decay;
+          smoke.size += dt * 10;
+          smoke.alpha -= smoke.decay * dt;
           if (smoke.alpha <= 0) {
             this.smokes.splice(i, 1);
           }
         }
       }
 
+      updateCoreFlashes(dt) {
+        for (let i = this.coreFlashes.length - 1; i >= 0; i--) {
+          const flash = this.coreFlashes[i];
+          flash.life += dt;
+          flash.radius += dt * 60;
+          flash.alpha -= dt * 2.5;
+          if (flash.alpha <= 0) {
+            this.coreFlashes.splice(i, 1);
+          }
+        }
+        this.screenFlash *= 0.88;
+      }
+
       render() {
         const ctx = this.ctx;
         if (!ctx) return;
+
         ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
         ctx.fillRect(0, 0, this.width, this.height);
+        this.drawStars(ctx);
 
         ctx.globalCompositeOperation = 'lighter';
         this.drawTrails(ctx);
         this.drawRockets(ctx);
         this.drawParticles(ctx);
+        this.drawCoreFlashes(ctx);
+
+        if (this.screenFlash > 0.01) {
+          ctx.fillStyle = `rgba(255,255,255,${this.screenFlash})`;
+          ctx.fillRect(0, 0, this.width, this.height);
+        }
 
         ctx.globalCompositeOperation = 'source-over';
         this.drawSmoke(ctx);
       }
 
+      drawStars(ctx) {
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        this.stars.forEach(star => {
+          ctx.globalAlpha = star.alpha;
+          ctx.beginPath();
+          ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
+      }
+
       drawRockets(ctx) {
         this.rockets.forEach(rocket => {
-          const gradient = ctx.createRadialGradient(rocket.x, rocket.y, 0, rocket.x, rocket.y, 12);
-          gradient.addColorStop(0, '#ffffff');
-          gradient.addColorStop(0.4, rocket.color.layers[0]);
+          const gradient = ctx.createRadialGradient(rocket.x, rocket.y, 0, rocket.x, rocket.y, 10);
+          gradient.addColorStop(0, 'rgba(255,255,255,0.9)');
+          gradient.addColorStop(0.5, rocket.theme.colors[0]);
           gradient.addColorStop(1, 'rgba(0,0,0,0)');
           ctx.fillStyle = gradient;
           ctx.beginPath();
-          ctx.arc(rocket.x, rocket.y, 12, 0, Math.PI * 2);
+          ctx.arc(rocket.x, rocket.y, 10, 0, Math.PI * 2);
           ctx.fill();
         });
       }
 
       drawParticles(ctx) {
-        this.particles.forEach(p => {
-          const radius = Math.max(0.4, p.size);
-          const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius);
-          const alpha = Math.max(0, p.alpha);
-          gradient.addColorStop(0, this.rgbToString({ ...p.color, a: alpha }));
-          gradient.addColorStop(0.5, this.rgbToString({ ...p.color, a: alpha * 0.6 }));
-          gradient.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = gradient;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-          ctx.fill();
-
-          if (p.prevX !== undefined) {
-            ctx.strokeStyle = this.rgbToString({ ...p.color, a: alpha * 0.4 });
-            ctx.lineWidth = Math.max(0.5, radius * 0.3);
-            ctx.beginPath();
-            ctx.moveTo(p.prevX, p.prevY);
-            ctx.lineTo(p.x, p.y);
-            ctx.stroke();
-          }
-        });
+        this.particles.forEach(particle => particle.draw(ctx));
       }
 
       drawTrails(ctx) {
         this.trails.forEach(trail => {
-          ctx.fillStyle = this.applyAlpha(trail.color, Math.max(0, trail.alpha));
+          ctx.fillStyle = trail.color;
+          ctx.globalAlpha = trail.alpha;
           ctx.beginPath();
-          ctx.arc(trail.x, trail.y, Math.max(0.4, trail.size), 0, Math.PI * 2);
+          ctx.arc(trail.x, trail.y, trail.size, 0, Math.PI * 2);
           ctx.fill();
         });
+        ctx.globalAlpha = 1;
       }
 
       drawSmoke(ctx) {
         this.smokes.forEach(smoke => {
           const gradient = ctx.createRadialGradient(smoke.x, smoke.y, 0, smoke.x, smoke.y, smoke.size);
-          gradient.addColorStop(0, this.applyAlpha(smoke.color || 'rgba(200,200,200,0.3)', smoke.alpha));
+          gradient.addColorStop(0, this.applyAlpha(smoke.color, smoke.alpha));
           gradient.addColorStop(1, 'rgba(0,0,0,0)');
           ctx.fillStyle = gradient;
           ctx.beginPath();
@@ -1155,52 +1403,36 @@
         });
       }
 
+      drawCoreFlashes(ctx) {
+        this.coreFlashes.forEach(flash => {
+          const gradient = ctx.createRadialGradient(flash.x, flash.y, 0, flash.x, flash.y, flash.radius);
+          gradient.addColorStop(0, `rgba(255,255,255,${Math.max(0, flash.alpha)})`);
+          gradient.addColorStop(0.6, 'rgba(255,255,255,0.2)');
+          gradient.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(flash.x, flash.y, flash.radius, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
       applyAlpha(color, alpha) {
-        const clampAlpha = Math.max(0, Math.min(1, alpha));
-        if (color.startsWith('rgba')) {
-          return color.replace(/rgba\(([^)]+),[^)]+\)/, `rgba($1, ${clampAlpha})`);
+        if (typeof color === 'string') {
+          const match = color.match(/rgba?\(([^)]+)\)/);
+          if (match) {
+            const parts = match[1].split(',').map(v => v.trim());
+            const [r, g, b] = parts;
+            return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+          }
+          return color;
         }
-        if (color.startsWith('rgb')) {
-          return color.replace('rgb', 'rgba').replace(')', `, ${clampAlpha})`);
-        }
-        if (color.startsWith('#')) {
-          const hex = color.slice(1);
-          const bigint = parseInt(hex, 16);
-          const r = (bigint >> 16) & 255;
-          const g = (bigint >> 8) & 255;
-          const b = bigint & 255;
-          return `rgba(${r}, ${g}, ${b}, ${clampAlpha})`;
-        }
-        return color;
-      }
-
-      hexToRgb(hex) {
-        if (!hex) return { r: 255, g: 255, b: 255, a: 1 };
-        const normalized = hex.replace('#', '');
-        const bigint = parseInt(normalized.length === 3 ? normalized.replace(/(.)/g, '$1$1') : normalized, 16);
-        return {
-          r: (bigint >> 16) & 255,
-          g: (bigint >> 8) & 255,
-          b: bigint & 255,
-          a: 1,
-        };
-      }
-
-      jitterColor(rgb, amount = 20) {
-        return {
-          r: Math.max(0, Math.min(255, rgb.r + (Math.random() - 0.5) * amount * 2)),
-          g: Math.max(0, Math.min(255, rgb.g + (Math.random() - 0.5) * amount * 2)),
-          b: Math.max(0, Math.min(255, rgb.b + (Math.random() - 0.5) * amount * 2)),
-          a: rgb.a ?? 1,
-        };
-      }
-
-      rgbToString({ r = 255, g = 255, b = 255, a = 1 }) {
-        return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, a))})`;
+        const rgb = hexToRgbColor(color);
+        return rgbToString(rgb, alpha);
       }
     }
 
-    // ==================== 烟花过场 ====================
+
+// ==================== 烟花过场 ====================
     async function fireworksTransition() {
       console.log('开始烟花效果');
       currentPhase = 'fireworks';
@@ -1227,7 +1459,7 @@
 
       if (fireworksEngine) {
         try {
-          await fireworksEngine.playShow(7000, 420);
+          await fireworksEngine.playShow(7000);
         } finally {
           fireworksEngine.stop();
         }
