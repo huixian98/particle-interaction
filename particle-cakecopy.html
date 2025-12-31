@@ -1,3 +1,4 @@
+      
 <!DOCTYPE html>
 <html lang="zh-CN">
 
@@ -28,8 +29,15 @@
             height: 100%;
             z-index: 1;
             background: #000;
+            transition: opacity 0.8s ease;
             /* 确保背景是黑色 */
         }
+
+        #canvas-container.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
 
         #fireworks-canvas {
             position: fixed;
@@ -62,6 +70,20 @@
         .ui-element {
             pointer-events: auto;
         }
+
+        #gui-panel {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 30;
+            pointer-events: auto;
+        }
+
+        #gui-panel.gui-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
 
         #loading-screen {
             position: fixed;
@@ -108,40 +130,14 @@
             opacity: 0.8;
         }
 
-        #upload-btn {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 12px 24px;
-            background: rgba(255, 215, 0, 0.1);
-            border: 1px solid rgba(255, 215, 0, 0.5);
-            border-radius: 8px;
-            color: #ffd700;
-            font-size: 14px;
-            cursor: pointer;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s;
-            z-index: 20;
-        }
-
-        #upload-btn:hover {
-            background: rgba(255, 215, 0, 0.2);
-            border-color: #ffd700;
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
-        }
-
-        #upload-btn.hidden {
-            display: none;
-        }
-
         #start-screen {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.95);
+            /* 让倒计时开始时能看到星空背景，使用半透明覆盖层 */
+            background: rgba(0, 0, 0, 0.25);
             display: flex;
             /* 默认显示 */
             flex-direction: column;
@@ -188,57 +184,6 @@
             font-size: 18px;
         }
 
-        #start-upload-btn {
-            padding: 12px 32px;
-            background: rgba(255, 215, 0, 0.1);
-            border: 1px solid rgba(255, 215, 0, 0.5);
-            border-radius: 8px;
-            color: #ffd700;
-            font-size: 16px;
-            cursor: pointer;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s;
-        }
-
-        #start-upload-btn:hover {
-            background: rgba(255, 215, 0, 0.2);
-            border-color: #ffd700;
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
-        }
-
-        #camera-preview {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 200px;
-            height: 150px;
-            border: 2px solid rgba(255, 215, 0, 0.5);
-            border-radius: 8px;
-            overflow: hidden;
-            background: #000;
-            z-index: 20;
-            backdrop-filter: blur(10px);
-        }
-
-        #camera-preview.hidden {
-            display: none;
-        }
-
-        #camera-video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        #camera-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
-
         #status-text {
             position: fixed;
             top: 30px;
@@ -260,10 +205,6 @@
             opacity: 1;
         }
 
-        #file-input {
-            display: none;
-        }
-
         .glow-text {
             text-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700, 0 0 30px #ffd700;
         }
@@ -276,7 +217,6 @@
             <span>开启 2026</span>
             <span class="star-icon">⭐</span>
         </button>
-        <button id="start-upload-btn" class="ui-element">上传照片</button>
     </div>
 
     <div id="canvas-container"></div>
@@ -284,22 +224,15 @@
 
     <div id="ui-overlay">
         <div id="status-text"></div>
-        <button id="upload-btn" class="ui-element hidden">上传照片</button>
-        <div id="camera-preview" class="ui-element hidden">
-            <video id="camera-video" autoplay playsinline></video>
-            <canvas id="camera-canvas"></canvas>
-        </div>
+        <div id="gui-panel" class="ui-element gui-hidden"></div>
     </div>
 
-    <input type="file" id="file-input" accept="image/*" />
 
     <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-        "@mediapipe/hands": "https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js",
-        "@mediapipe/camera_utils": "https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js",
+        "three": "https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/",
         "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.esm.js"
       }
     }
@@ -325,26 +258,18 @@
                 NEAR: 0.1,
                 FAR: 2000,
                 INIT_Z: 600,
-                TARGET_Z_WARP: 50,
                 TARGET_Z_MAIN: 800
             },
             INTRO: {
                 COUNTDOWN: ['5', '4', '3', '2', '1', '2026'],
                 GATHER_DURATION: 900,
                 HOLD_DURATION: 550,
+                HOLD_DURATION_2026: 1500,  // 2026 文字保持显示的时间（毫秒）
                 INITIAL_DELAY: 500,
                 FONT_SIZE_NORMAL: 240,
                 FONT_SIZE_2026: 220,
                 SCALE_NORMAL: 1.5,
                 SCALE_2026: 2.0
-            },
-            WARP_SPEED: {
-                DURATION: 3000,
-                SIZE_MULTIPLIER: 15,
-                Z_STRETCH_FACTOR: 4,
-                XY_STRETCH_FACTOR: 0.5,
-                OPACITY_MIN: 0.7,
-                OPACITY_MAX: 1.0
             },
             TEXT_TO_POSITIONS: {
                 CANVAS_WIDTH: 2048,
@@ -362,39 +287,40 @@
                 DAMPING_FAR: 0.82,
                 DAMPING_MID: 0.88,
                 DAMPING_NEAR: 0.92,
-                CAKE_LERP: 0.05,
-                HAND_ROTATION_SENSITIVITY: 0.05,
-                HAND_ROTATION_SMOOTH: 0.1
-            },
-            GESTURE: {
-                COOLDOWN: 500
+                CAKE_LERP: 0.05
             },
             FIREWORKS: {
-                DURATION: 7000,
+                DURATION: 7000,  // 缩短烟花持续时间，加快转场
                 MAX_PARTICLES: 2200,
                 MAX_FIREWORKS: 10,
                 STAR_COUNT: 150
             },
             CAKE: {
                 LAYER_COUNT: 3,
-                INSTANCES_PER_LAYER: 15000,
+                POINTS_PER_LAYER: 2000,
                 DUST_COUNT: 2000,
                 STAR_COUNT: 3000,
-                FLOATING_TEXT: '2026祝你开心...',
-                FLOATING_TEXT_SIZE: 120,
-                FLOATING_TEXT_Y: 300
-            }
+                FLOATING_TEXT: '2026祝你开心',
+                FLOATING_TEXT_SIZE: 90,
+                // 变大的话，文字会更高
+                FLOATING_TEXT_Y: 380, 
+                // 变小的话，蛋糕会往下；已调整为更靠上，避免触底
+                VERTICAL_OFFSET: -160,
+                // 以弧度/秒为单位的绕 Y 轴旋转速度（0.52 ≈ 每 12 秒转一圈）
+                ROTATION_SPEED: 0.52
+            },
         };
 
         // 模块导入
         import * as THREE from 'three';
-        import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
-        import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
-        import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from 'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/postprocessing/ShaderPass.js';
+        import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
 
         // 可选模块（可能加载失败）
-        let Hands = null;
-        let Camera = null;
         let gsap = null;
         let modulesLoadingPromise = null;
 
@@ -421,53 +347,55 @@
         }
 
         modulesLoadingPromise = Promise.allSettled([
-            import('@mediapipe/hands').then(m => { Hands = m.Hands; console.log('MediaPipe Hands 加载成功'); }).catch(e => console.warn('MediaPipe Hands 加载失败:', e)),
-            import('@mediapipe/camera_utils').then(m => { Camera = m.Camera; console.log('MediaPipe Camera 加载成功'); }).catch(e => console.warn('MediaPipe Camera 加载失败:', e)),
             loadGsapWithFallback().then(instance => { gsap = instance; })
         ]).then(() => {
             console.log('所有可选模块加载尝试完成');
             console.log('GSAP 状态:', gsap && typeof gsap.to === 'function' ? '已加载且可用' : '未加载或不可用');
-            console.log('MediaPipe 状态:', Hands && Camera ? '已加载' : '未加载');
         });
 
         // ==================== 全局变量 ====================
         let scene, camera, renderer, composer;
-        let particleSystem, instancedMesh;
-        let handTracker, cameraVideo, cameraCanvas, cameraCtx;
+        let particleSystem, cakePoints, floatingTextMesh = null;
+        let cakeGroup = null;
+        // 是否启用蛋糕持续自转（在进入主场景时设置为 true）
+        let cakeAutoRotate = false;
+        let cakePointCount = 0;
+        let cakeBasePositions = null;
+        let cakeTargetPositions = null;
+        // 用于在倒计时阶段隐藏背景粒子（把它们移动到视野外）
+        const OFFSCREEN_POS = 1e6; // 足够大的数值，位于摄像机视锥之外
+        // 持久化星空和金色微尘引用，便于显示控制
+        let starField = null;
+        let goldDust = null;
+        let cakePositionAttribute = null;
+        // 全局保存蜡烛组，以便在不同阶段控制显示
+        let cakeCandleGroup = null;
         let fireworksCanvas, fireworksEngine;
         let currentPhase = 'intro'; // intro, fireworks, main
         const particleCount = CONFIG.PARTICLE.COUNT;
         let positions, velocities, targets;
-        let userPhotos = [];
         let sceneRotation = { x: 0, y: 0 };
-        let handState = null;
-        let handCenter = null;
-        let lastGestureTime = 0;
+
 
         // DOM元素缓存
         const DOM = {
             statusText: null,
-            uploadBtn: null,
             startBtn: null,
-            startUploadBtn: null,
-            fileInput: null,
             startScreen: null,
-            cameraPreview: null,
             loadingScreen: null,
-            canvasContainer: null
+            canvasContainer: null,
+            guiPanel: null
         };
 
         // 初始化DOM缓存
         function initDOMCache() {
             DOM.statusText = document.getElementById('status-text');
-            DOM.uploadBtn = document.getElementById('upload-btn');
             DOM.startBtn = document.getElementById('start-btn');
-            DOM.startUploadBtn = document.getElementById('start-upload-btn');
-            DOM.fileInput = document.getElementById('file-input');
             DOM.startScreen = document.getElementById('start-screen');
-            DOM.cameraPreview = document.getElementById('camera-preview');
             DOM.loadingScreen = document.getElementById('loading-screen');
             DOM.canvasContainer = document.getElementById('canvas-container');
+
+            DOM.guiPanel = document.getElementById('gui-panel');
         }
 
         // ==================== 工具函数 ====================
@@ -482,7 +410,7 @@
             }, duration);
         }
 
-        function textToPositions(text, fontSize = 200, scaleMultiplier = 1.0) {
+        function textToPositions(text, fontSize = 200, scaleMultiplier = 1.0, letterSpacing = 0, useBold = true) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const cfg = CONFIG.TEXT_TO_POSITIONS;
@@ -491,10 +419,41 @@
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#fff';
-            ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            // 使用更优雅的字体，去掉粗体或使用更细的字体
+            const fontWeight = useBold ? 'bold' : 'normal';
+            // 使用更优雅的字体族，优先使用系统字体
+            ctx.font = `${fontWeight} ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif`;
+            
+            // 如果设置了字间距，需要逐个字符绘制
+            if (letterSpacing > 0) {
+                ctx.textAlign = 'left';
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                let currentX = centerX;
+                
+                // 先测量总宽度，以便居中
+                let totalWidth = 0;
+                for (let i = 0; i < text.length; i++) {
+                    const char = text[i];
+                    const metrics = ctx.measureText(char);
+                    totalWidth += metrics.width + (i < text.length - 1 ? letterSpacing : 0);
+                }
+                
+                // 从中心向左偏移一半宽度，开始绘制
+                currentX = centerX - totalWidth / 2;
+                
+                for (let i = 0; i < text.length; i++) {
+                    const char = text[i];
+                    ctx.fillText(char, currentX, centerY);
+                    const metrics = ctx.measureText(char);
+                    currentX += metrics.width + letterSpacing;
+                }
+            } else {
+                ctx.textAlign = 'center';
+                ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            }
 
             const positions = [];
             const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -514,7 +473,7 @@
                 }
             }
 
-            console.log(`文本 "${text}" 提取了 ${positions.length / 3} 个粒子位置，缩放倍数: ${scaleMultiplier}`);
+            console.log(`文本 "${text}" 提取了 ${positions.length / 3} 个粒子位置，缩放倍数: ${scaleMultiplier}, 字间距: ${letterSpacing}`);
             return new Float32Array(positions);
         }
 
@@ -584,6 +543,10 @@
             }
 
             initParticles();
+            createCakeStructure();
+            createGoldDust();
+            createStarField();
+            createFloatingText();
             initPostProcessing();
             window.addEventListener('resize', onWindowResize);
         }
@@ -646,6 +609,12 @@
             console.log('开始倒计时序列');
             currentPhase = 'intro';
 
+            // 确保倒计时使用的星空为可见状态（从开始到倒计时期间保持）
+            if (starField) {
+                starField.visible = true;
+                console.log('startIntroSequence: starField visible');
+            }
+
             if (!particleSystem) {
                 console.error('粒子系统未创建！');
                 return;
@@ -679,26 +648,62 @@
                 const textPositions = textToPositions(text, fontSize, scale);
                 console.log(`文本 "${text}" 生成 ${textPositions.length / 3} 个粒子位置`);
 
-                retargetParticles(textPositions);
+                // 特殊处理：仅对 '2026' 使用隐藏背景与随机化映射以保证整体同时出现
+                if (text === '2026') {
+                    retargetParticles(textPositions, { hideBackground: true, shuffle: true });
+                } else {
+                    // 其他数字使用常规映射并保留背景粒子
+                    retargetParticles(textPositions, { hideBackground: false, shuffle: false });
+                }
+
                 await new Promise(resolve => setTimeout(resolve, cfg.GATHER_DURATION));
                 console.log(`步骤2: 保持数字 "${text}"`);
-                await new Promise(resolve => setTimeout(resolve, cfg.HOLD_DURATION));
+                // 2026 使用更长的保持时间
+                const holdTime = is2026 ? (cfg.HOLD_DURATION_2026 || cfg.HOLD_DURATION) : cfg.HOLD_DURATION;
+                await new Promise(resolve => setTimeout(resolve, holdTime));
 
                 if (i < countdown.length - 1) {
                     console.log(`步骤3: 准备下一个数字`);
-                    scatterParticles();
+                    // 将当前用于数字的粒子散开，为下一个数字腾出位置；保持背景（如果存在）不隐藏
+                    const thisTextParticleCount = Math.min(textPositions.length / 3, particleCount);
+                    scatterParticles(thisTextParticleCount, false);
                 }
             }
 
-            await warpSpeedEffect();
+            // -------------- 粒子消散（替代 Warp） --------------
+            await (async () => {
+            const fadeMS = 800;                // 总淡出时长
+            const step   = 50;                 // 每帧间隔
+            const steps  = fadeMS / step;
+
+            scatterParticles();                // ① 吹散（已有函数）
+            for (let i = 0; i <= steps; i++) { // ② 淡出
+                if (particleSystem) {
+                particleSystem.material.opacity = 1 - i / steps;
+                }
+                await new Promise(r => setTimeout(r, step));
+            }
+            // ③ 清理
+            if (particleSystem) {
+                scene.remove(particleSystem);
+                particleSystem.geometry.dispose();
+                particleSystem.material.dispose();
+                particleSystem = null;
+            }
+            })();
+            // ----------------------------------------------------
+
             await fireworksTransition();
         }
 
-        function scatterParticles() {
-            console.log('粒子散开...');
+        // 可以选择只散开前 N 个粒子（用于倒计时只对组成数字的粒子做动画），或在隐藏背景时把其余粒子移出视野
+        function scatterParticles(countLimit = null, hideBackground = false) {
+            console.log('粒子散开...', { countLimit, hideBackground });
             const cfg = CONFIG.PARTICLE;
             const radiusRange = cfg.SCATTER_RADIUS_MAX - cfg.SCATTER_RADIUS_MIN;
-            for (let i = 0; i < particleCount; i++) {
+            const limit = (typeof countLimit === 'number' && countLimit >= 0) ? Math.min(countLimit, particleCount) : particleCount;
+
+            for (let i = 0; i < limit; i++) {
                 const idx = i * 3;
                 const radius = cfg.SCATTER_RADIUS_MIN + Math.random() * radiusRange;
                 const theta = Math.random() * Math.PI * 2;
@@ -709,11 +714,30 @@
                 targets[idx + 1] = radius * Math.cos(phi);
                 targets[idx + 2] = radius * sinPhi * Math.sin(theta);
             }
+
+            if (hideBackground) {
+                for (let i = limit; i < particleCount; i++) {
+                    const idx = i * 3;
+                    targets[idx] = OFFSCREEN_POS;
+                    targets[idx + 1] = OFFSCREEN_POS;
+                    targets[idx + 2] = OFFSCREEN_POS;
+                    // 立即也把位置移出，避免等待动画才消失
+                    if (particleSystem && particleSystem.geometry && particleSystem.geometry.attributes.position) {
+                        const posArr = particleSystem.geometry.attributes.position.array;
+                        posArr[idx] = OFFSCREEN_POS;
+                        posArr[idx + 1] = OFFSCREEN_POS;
+                        posArr[idx + 2] = OFFSCREEN_POS;
+                        particleSystem.geometry.attributes.position.needsUpdate = true;
+                    }
+                }
+            }
         }
 
-        function retargetParticles(newTargets) {
+        function retargetParticles(newTargets, options = {}) {
+            const hideBackground = !!options.hideBackground;
+            const shuffle = !!options.shuffle;
             const targetCount = newTargets.length / 3;
-            console.log(`重新定位粒子: 目标位置数=${targetCount}, 粒子数=${particleCount}`);
+            console.log(`重新定位粒子: 目标位置数=${targetCount}, 粒子数=${particleCount}`, { hideBackground, shuffle });
 
             if (targetCount === 0) {
                 console.warn('目标位置为空！');
@@ -725,307 +749,205 @@
             const cfg = CONFIG.PARTICLE;
             const bgRadiusRange = cfg.BACKGROUND_RADIUS_MAX - cfg.BACKGROUND_RADIUS_MIN;
 
-            if (targetCount >= particleCount) {
-                const step = targetCount / particleCount;
-                for (let i = 0; i < particleCount; i++) {
-                    const srcIdx = Math.floor(i * step) * 3;
-                    const dst = i * 3;
+            // 生成粒子索引数组
+            const indices = Array.from({ length: particleCount }, (_, i) => i);
+
+            if (shuffle) {
+                // 随机打乱索引（只在需要时启用，如 '2026'）
+                for (let i = indices.length - 1; i > 0; i--) {
+                    const r = Math.floor(Math.random() * (i + 1));
+                    const tmp = indices[i]; indices[i] = indices[r]; indices[r] = tmp;
+                }
+
+                // 将文本目标均匀映射到前 textParticleCount 个随机粒子上
+                for (let t = 0; t < textParticleCount; t++) {
+                    const srcIdx = Math.floor(t * targetCount / textParticleCount) * 3;
+                    const particleIdx = indices[t];
+                    const dst = particleIdx * 3;
                     targets[dst] = newTargets[srcIdx] || 0;
                     targets[dst + 1] = newTargets[srcIdx + 1] || 0;
                     targets[dst + 2] = newTargets[srcIdx + 2] || 0;
+                }
+
+                // 处理剩余粒子
+                for (let k = textParticleCount; k < particleCount; k++) {
+                    const particleIdx = indices[k];
+                    const dst = particleIdx * 3;
+                    if (hideBackground) {
+                        targets[dst] = OFFSCREEN_POS;
+                        targets[dst + 1] = OFFSCREEN_POS;
+                        targets[dst + 2] = OFFSCREEN_POS;
+                        if (particleSystem && particleSystem.geometry && particleSystem.geometry.attributes.position) {
+                            const posArr = particleSystem.geometry.attributes.position.array;
+                            posArr[dst] = OFFSCREEN_POS;
+                            posArr[dst + 1] = OFFSCREEN_POS;
+                            posArr[dst + 2] = OFFSCREEN_POS;
+                        }
+                    } else {
+                        const radius = cfg.BACKGROUND_RADIUS_MIN + Math.random() * bgRadiusRange;
+                        const theta = Math.random() * Math.PI * 2;
+                        const phi = Math.acos(Math.random() * 2 - 1);
+                        const sinPhi = Math.sin(phi);
+
+                        targets[dst] = radius * sinPhi * Math.cos(theta);
+                        targets[dst + 1] = radius * Math.cos(phi);
+                        targets[dst + 2] = radius * sinPhi * Math.sin(theta);
+                    }
                 }
             } else {
-                for (let i = 0; i < targetCount; i++) {
-                    const srcIdx = i * 3;
+                // 非随机映射：按顺序把目标位置赋给前 textParticleCount 个粒子，保持原先效果（避免丢失数字）
+                const assignCount = textParticleCount;
+                const step = Math.max(1, Math.floor(targetCount / assignCount));
+                for (let i = 0; i < assignCount; i++) {
+                    const srcIdx = Math.min((i * step) * 3, (targetCount - 1) * 3);
                     const dst = i * 3;
                     targets[dst] = newTargets[srcIdx] || 0;
                     targets[dst + 1] = newTargets[srcIdx + 1] || 0;
                     targets[dst + 2] = newTargets[srcIdx + 2] || 0;
                 }
 
-                for (let i = targetCount; i < particleCount; i++) {
+                // 剩余粒子按背景规则填充或隐藏
+                for (let i = assignCount; i < particleCount; i++) {
                     const dst = i * 3;
-                    const radius = cfg.BACKGROUND_RADIUS_MIN + Math.random() * bgRadiusRange;
-                    const theta = Math.random() * Math.PI * 2;
-                    const phi = Math.acos(Math.random() * 2 - 1);
-                    const sinPhi = Math.sin(phi);
+                    if (hideBackground) {
+                        targets[dst] = OFFSCREEN_POS;
+                        targets[dst + 1] = OFFSCREEN_POS;
+                        targets[dst + 2] = OFFSCREEN_POS;
+                        if (particleSystem && particleSystem.geometry && particleSystem.geometry.attributes.position) {
+                            const posArr = particleSystem.geometry.attributes.position.array;
+                            posArr[dst] = OFFSCREEN_POS;
+                            posArr[dst + 1] = OFFSCREEN_POS;
+                            posArr[dst + 2] = OFFSCREEN_POS;
+                        }
+                    } else {
+                        const radius = cfg.BACKGROUND_RADIUS_MIN + Math.random() * bgRadiusRange;
+                        const theta = Math.random() * Math.PI * 2;
+                        const phi = Math.acos(Math.random() * 2 - 1);
+                        const sinPhi = Math.sin(phi);
 
-                    targets[dst] = radius * sinPhi * Math.cos(theta);
-                    targets[dst + 1] = radius * Math.cos(phi);
-                    targets[dst + 2] = radius * sinPhi * Math.sin(theta);
+                        targets[dst] = radius * sinPhi * Math.cos(theta);
+                        targets[dst + 1] = radius * Math.cos(phi);
+                        targets[dst + 2] = radius * sinPhi * Math.sin(theta);
+                    }
                 }
             }
 
-            console.log(`粒子重新定位完成: ${textParticleCount} 个形成数字, ${backgroundParticleCount} 个作为背景`);
-        }
+            if (particleSystem && particleSystem.geometry && particleSystem.geometry.attributes.position) {
+                particleSystem.geometry.attributes.position.needsUpdate = true;
+            }
 
-        async function warpSpeedEffect() {
-            return new Promise(resolve => {
-                try {
-                    console.log('开始 Warp Speed 效果（星际穿越）');
-                    const cfg = CONFIG.WARP_SPEED;
-                    const camCfg = CONFIG.CAMERA;
-                    const startZ = camera.position.z;
-                    const targetZ = camCfg.TARGET_Z_WARP;
-                    const startParticleSize = particleSystem ? particleSystem.material.size : CONFIG.PARTICLE.SIZE;
-                    const originalTargets = new Float32Array(targets);
-
-                    const updateParticles = (stretch) => {
-                        if (!particleSystem) return;
-                        const sizeMultiplier = 1 + stretch * stretch * cfg.SIZE_MULTIPLIER;
-                        particleSystem.material.size = startParticleSize * sizeMultiplier;
-
-                        const positionArray = particleSystem.geometry.attributes.position.array;
-                        const zStretchFactor = 1 + stretch * stretch * cfg.Z_STRETCH_FACTOR;
-                        const xyStretchFactor = 1 + stretch * cfg.XY_STRETCH_FACTOR;
-
-                        for (let i = 0; i < particleCount; i++) {
-                            const idx = i * 3;
-                            const origX = originalTargets[idx] || 0;
-                            const origY = originalTargets[idx + 1] || 0;
-                            const origZ = originalTargets[idx + 2] || 0;
-
-                            positionArray[idx] = origX * xyStretchFactor;
-                            positionArray[idx + 1] = origY * xyStretchFactor;
-                            positionArray[idx + 2] = origZ * zStretchFactor;
-                        }
-                        particleSystem.geometry.attributes.position.needsUpdate = true;
-                        particleSystem.material.opacity = Math.min(1, cfg.OPACITY_MIN + stretch * (cfg.OPACITY_MAX - cfg.OPACITY_MIN));
-                    };
-
-                    const complete = () => {
-                        console.log('Warp Speed 效果完成');
-                        if (particleSystem) particleSystem.visible = false;
-                        camera.position.z = camCfg.INIT_Z;
-                        resolve();
-                    };
-
-                    if (!gsap || typeof gsap.to !== 'function') {
-                        console.warn('GSAP 未加载，使用简单动画');
-                        const startTime = Date.now();
-                        const animate = () => {
-                            const elapsed = Date.now() - startTime;
-                            const progress = Math.min(elapsed / cfg.DURATION, 1);
-                            const easeProgress = 1 - Math.pow(1 - progress, 4);
-
-                            camera.position.z = startZ + (targetZ - startZ) * easeProgress;
-                            updateParticles(easeProgress);
-
-                            if (progress < 1) {
-                                requestAnimationFrame(animate);
-                            } else {
-                                complete();
-                            }
-                        };
-                        animate();
-                    } else {
-                        gsap.to(camera.position, {
-                            z: targetZ,
-                            duration: cfg.DURATION / 1000,
-                            ease: 'power3.in',
-                            onUpdate: () => {
-                                const progress = Math.max(0, Math.min(1, (camera.position.z - startZ) / (targetZ - startZ)));
-                                updateParticles(progress);
-                            },
-                            onComplete: complete
-                        });
-                    }
-                } catch (error) {
-                    console.error('Warp Speed 效果错误:', error);
-                    resolve();
-                }
-            });
+            console.log(`粒子重新定位完成: ${textParticleCount} 个形成数字, ${backgroundParticleCount} 个作为背景`, { hideBackground, shuffle });
         }
 
         // ==================== Canvas 烟花系统 ====================
-        function clampColor(value) {
-            return Math.max(0, Math.min(255, value));
-        }
+        // 限定颜色分量到合法范围 0-255
+        function clampColor(value) { return Math.max(0, Math.min(255, Math.round(value))); }
 
+        // 将 #rrggbb 或 #rgb 转为 {r,g,b}
         function hexToRgbColor(hex) {
             if (!hex) return { r: 255, g: 255, b: 255 };
             const normalized = hex.replace('#', '');
             const expanded = normalized.length === 3 ? normalized.replace(/(.)/g, '$1$1') : normalized;
             const bigint = parseInt(expanded, 16);
-            return {
-                r: clampColor((bigint >> 16) & 255),
-                g: clampColor((bigint >> 8) & 255),
-                b: clampColor(bigint & 255)
-            };
+            return { r: clampColor((bigint >> 16) & 255), g: clampColor((bigint >> 8) & 255), b: clampColor(bigint & 255) };
         }
 
-        function jitterRgb(rgb, amount = 20) {
-            return {
-                r: clampColor(rgb.r + (Math.random() - 0.5) * amount * 2),
-                g: clampColor(rgb.g + (Math.random() - 0.5) * amount * 2),
-                b: clampColor(rgb.b + (Math.random() - 0.5) * amount * 2)
-            };
-        }
+        // 随机扰动 RGB 值（用于色彩变化）
+        function jitterRgb(rgb, amount = 20) { return { r: clampColor(rgb.r + (Math.random() - 0.5) * amount * 2), g: clampColor(rgb.g + (Math.random() - 0.5) * amount * 2), b: clampColor(rgb.b + (Math.random() - 0.5) * amount * 2) }; }
 
-        function rgbToString(rgb, alpha = 1) {
-            return `rgba(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)}, ${Math.max(0, Math.min(1, alpha))})`;
-        }
+        // 将 rgb 对象转为 CSS rgba 字符串
+        function rgbToString(rgb, alpha = 1) { return `rgba(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)}, ${Math.max(0, Math.min(1, alpha))})`; }
 
+        // 小工具：在区间内随机浮点数
+        function randRange(min, max) { return min + Math.random() * (max - min); }
+        // 小工具：随机选择数组元素
+        function choice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+        /**
+         * FireworkParticle: 单个烟花粒子，负责物理更新与绘制。
+         * init(config) => 初始化粒子（供池化复用）。
+         */
         class FireworkParticle {
-            constructor(engine) {
-                this.engine = engine;
-                this.active = false;
-            }
+            constructor(engine) { this.engine = engine; this.active = false; }
 
-            init(config) {
-                this.x = config.x;
-                this.y = config.y;
-                this.prevX = this.x;
-                this.prevY = this.y;
-                this.vx = config.vx;
-                this.vy = config.vy;
-                this.baseSize = config.size || 3;
-                this.size = this.baseSize;
-                this.alpha = config.alpha ?? 1;
-                this.life = 0;
-                this.lifespan = config.lifespan || 1.5;
-                this.gravity = (config.gravity ?? 0.12) * 3600;
-                this.resistance = config.resistance ?? 0.98;
-                this.decay = config.decay ?? 0.02;
-                this.shrink = config.shrink ?? 0.96;
-                this.color = config.color || { r: 255, g: 255, b: 255 };
-                this.trailTimer = 0;
-                this.allowReburst = config.allowReburst ?? false;
-                this.reburstTriggered = false;
-                this.flicker = Math.random() < 0.5; // 增加闪烁粒子比例
-                this.flickerIntensity = 0.3 + Math.random() * 0.4; // 闪烁强度
-                this.sparkle = Math.random() < 0.3; // 星闪效果
-                this.sparklePhase = Math.random() * Math.PI * 2; // 星闪相位
-                this.rotation = Math.random() * Math.PI * 2; // 粒子旋转
-                this.rotationSpeed = (Math.random() - 0.5) * 0.1; // 旋转速度
-                this.active = true;
+            init(config = {}) {
+                const {
+                    x, y, vx, vy,
+                    size = 3, alpha = 1, lifespan = 1.5,
+                    gravity = 0.12, resistance = 0.98, decay = 0.02, shrink = 0.96,
+                    color = { r: 255, g: 255, b: 255 }, allowReburst = false
+                } = config;
+
+                Object.assign(this, {
+                    x, y, prevX: x, prevY: y, vx, vy,
+                    baseSize: size, size, alpha, life: 0, lifespan,
+                    gravity: gravity * 3600, resistance, decay, shrink,
+                    color, trailTimer: 0, allowReburst, reburstTriggered: false,
+                    flicker: Math.random() < 0.5, flickerIntensity: 0.3 + Math.random() * 0.4,
+                    sparkle: Math.random() < 0.3, sparklePhase: Math.random() * Math.PI * 2,
+                    rotation: Math.random() * Math.PI * 2, rotationSpeed: (Math.random() - 0.5) * 0.1,
+                    active: true
+                });
                 return this;
             }
 
             update(dt) {
                 const frameRatio = dt / (1 / 60);
-                const resistance = Math.pow(this.resistance, frameRatio);
-                this.prevX = this.x;
-                this.prevY = this.y;
+                const resPow = Math.pow(this.resistance, frameRatio);
+                this.prevX = this.x; this.prevY = this.y;
+                this.vx *= resPow; this.vy = this.vy * resPow + this.gravity * dt;
+                this.x += this.vx * dt; this.y += this.vy * dt;
+                this.life += dt; this.rotation += this.rotationSpeed * dt;
 
-                // 简单的物理运动：重力和空气阻力
-                // 水平速度：受空气阻力影响，逐渐减慢
-                this.vx *= resistance;
-
-                // 垂直速度：受重力和空气阻力影响
-                this.vy = this.vy * resistance + this.gravity * dt;
-
-                // 更新位置
-                this.x += this.vx * dt;
-                this.y += this.vy * dt;
-
-                this.life += dt;
-                this.rotation += this.rotationSpeed * dt;
-
-                // 尺寸变化：粒子逐渐减小
-                const shrink = Math.pow(this.shrink, frameRatio);
-                this.size = Math.max(0, this.size * shrink);
-
-                // Alpha衰减：随时间淡出消失
+                this.size = Math.max(0, this.size * Math.pow(this.shrink, frameRatio));
                 const lifeProgress = this.life / this.lifespan;
-                const baseAlpha = Math.max(0, 1 - lifeProgress * lifeProgress); // 二次衰减，更平滑
-                this.alpha = baseAlpha * (this.alpha ?? 1);
+                let baseAlpha = Math.max(0, 1 - lifeProgress * lifeProgress);
+                this.alpha = Math.min(1, Math.max(0, baseAlpha * (this.alpha ?? 1)));
 
-                // 闪烁效果增强
-                if (this.flicker) {
-                    const flickerValue = Math.sin(this.life * 15 + Math.random() * Math.PI) * this.flickerIntensity;
-                    this.alpha += flickerValue * 0.15;
+                if (this.flicker) this.alpha += Math.sin(this.life * 15 + Math.random() * Math.PI) * this.flickerIntensity * 0.15;
+                if (this.sparkle) this.alpha += (Math.sin(this.life * 20 + this.sparklePhase) + 1) * 0.5 * 0.2;
+
+                if (this.allowReburst && !this.reburstTriggered && this.life > this.lifespan * 0.3 && this.life < this.lifespan * 0.6 && Math.random() < 0.025) {
+                    this.reburstTriggered = true; this.engine.createSubExplosion(this.x, this.y, this.color);
                 }
 
-                // 星闪效果
-                if (this.sparkle) {
-                    const sparkleValue = (Math.sin(this.life * 20 + this.sparklePhase) + 1) * 0.5;
-                    this.alpha += sparkleValue * 0.2;
-                }
-
-                this.alpha = Math.min(1, Math.max(0, this.alpha));
-
-                if (
-                    this.allowReburst &&
-                    !this.reburstTriggered &&
-                    this.life > this.lifespan * 0.3 &&
-                    this.life < this.lifespan * 0.6 &&
-                    Math.random() < 0.025
-                ) {
-                    this.reburstTriggered = true;
-                    this.engine.createSubExplosion(this.x, this.y, this.color);
-                }
-
-                // 轨迹拖尾：快速粒子留下光痕
-                // 简化拖尾效果
                 this.trailTimer += dt;
                 if (this.trailTimer >= 0.02) {
-                    this.engine.trails.push({
-                        x: this.x,
-                        y: this.y,
-                        alpha: this.alpha * 0.5,
-                        size: Math.max(0.4, this.size * 0.5),
-                        decay: 2.5,
-                        color: rgbToString(this.color, 0.4)
-                    });
+                    this.engine.trails.push({ x: this.x, y: this.y, alpha: this.alpha * 0.5, size: Math.max(0.4, this.size * 0.5), decay: 2.5, color: rgbToString(this.color, 0.4) });
                     this.trailTimer = 0;
                 }
 
-                if (
-                    this.alpha <= 0 ||
-                    this.size <= 0.1 ||
-                    this.y > this.engine.height + 150 ||
-                    this.x < -150 ||
-                    this.x > this.engine.width + 150
-                ) {
-                    this.release();
-                    return false;
+                if (this.alpha <= 0 || this.size <= 0.1 || this.y > this.engine.height + 150 || this.x < -150 || this.x > this.engine.width + 150) {
+                    this.release(); return false;
                 }
-
                 return true;
             }
 
-            draw(ctx) {
-                // 去掉光晕，只绘制简单的圆点
-                const radius = Math.max(0.8, this.size);
-
-                // 简单的实心圆点
-                ctx.fillStyle = rgbToString(this.color, this.alpha);
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            release() {
-                this.active = false;
-                this.engine.particlePool.push(this);
-            }
+            draw(ctx) { ctx.fillStyle = rgbToString(this.color, this.alpha); ctx.beginPath(); ctx.arc(this.x, this.y, Math.max(0.8, this.size), 0, Math.PI * 2); ctx.fill(); }
+            release() { this.active = false; this.engine.particlePool.push(this); }
         }
+        /**
+         * FireworksEngine: Canvas 烟花系统（保留原有 API 与可配置项）
+         * 目标：精简构造与更新逻辑，保持行为不变并添加必要注释。
+         */
         class FireworksEngine {
             constructor(canvas) {
                 this.canvas = canvas;
                 this.ctx = canvas.getContext('2d');
-                this.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-                this.width = window.innerWidth;
-                this.height = window.innerHeight;
-                this.rockets = [];
-                this.particles = [];
-                this.trails = [];
-                this.smokes = [];
-                this.coreFlashes = [];
-                this.screenFlash = 0;
-                this.particlePool = [];
-                this.maxParticles = CONFIG.FIREWORKS.MAX_PARTICLES;
-                this.maxFireworks = CONFIG.FIREWORKS.MAX_FIREWORKS;
-                this.running = false;
-                this.activeShow = false;
-                this.launchTimer = 0;
-                this.nextLaunchDelay = this.randomLaunchDelay();
-                this.duration = 6000;
-                this.elapsed = 0;
-                this.resolveShow = null;
-                this.lastTime = 0;
-                this.stars = [];
+                Object.assign(this, {
+                    pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    rockets: [], particles: [], trails: [], smokes: [], coreFlashes: [],
+                    screenFlash: 0, particlePool: [],
+                    maxParticles: CONFIG.FIREWORKS.MAX_PARTICLES,
+                    maxFireworks: CONFIG.FIREWORKS.MAX_FIREWORKS,
+                    running: false, activeShow: false,
+                    launchTimer: 0, nextLaunchDelay: 200 + Math.random() * 600,
+                    duration: 6000, elapsed: 0, resolveShow: null, lastTime: 0
+                });
+
+                // 颜色主题池（保留原始主题集合）
                 this.themeBase = [
                     { colors: ['#ffffff', '#ffd700', '#ffa500', '#ff8c00'], smoke: 'rgba(255, 210, 130, 0.2)' },
                     { colors: ['#ffffff', '#ff0000', '#ff4500', '#b22222'], smoke: 'rgba(255, 120, 120, 0.2)' },
@@ -1033,415 +955,126 @@
                     { colors: ['#ffffff', '#32cd32', '#00ff00', '#228b22'], smoke: 'rgba(180, 255, 200, 0.16)' },
                     { colors: ['#ffffff', '#9370db', '#ba55d3', '#8a2be2'], smoke: 'rgba(210, 180, 255, 0.2)' }
                 ];
-                this.themePool = [];
+
                 this.loop = this.loop.bind(this);
                 this.resize = this.resize.bind(this);
                 this.resize();
                 window.addEventListener('resize', this.resize);
             }
 
-            randomLaunchDelay() {
-                return 200 + Math.random() * 600;
-            }
+            // 简短工具
+            randomLaunchDelay = () => randRange(200, 800);
 
             resize() {
                 if (!this.canvas) return;
                 this.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-                this.width = window.innerWidth;
-                this.height = window.innerHeight;
-                this.canvas.width = this.width * this.pixelRatio;
-                this.canvas.height = this.height * this.pixelRatio;
-                this.canvas.style.width = `${this.width}px`;
-                this.canvas.style.height = `${this.height}px`;
+                this.width = window.innerWidth; this.height = window.innerHeight;
+                this.canvas.width = this.width * this.pixelRatio; this.canvas.height = this.height * this.pixelRatio;
+                this.canvas.style.width = `${this.width}px`; this.canvas.style.height = `${this.height}px`;
                 this.ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
                 this.generateStars();
             }
 
-            generateStars() {
-                const count = CONFIG.FIREWORKS.STAR_COUNT;
-                this.stars = Array.from({ length: count }, () => ({
-                    x: Math.random() * this.width,
-                    y: Math.random() * this.height,
-                    size: Math.random() * 2 + 0.5,
-                    alpha: 0.2 + Math.random() * 0.4
-                }));
-            }
+            generateStars() { const count = CONFIG.FIREWORKS.STAR_COUNT; this.stars = Array.from({ length: count }, () => ({ x: Math.random() * this.width, y: Math.random() * this.height, size: Math.random() * 2 + 0.5, alpha: 0.2 + Math.random() * 0.4 })); }
 
-            start() {
-                if (this.running) return;
-                this.running = true;
-                this.lastTime = performance.now();
-                requestAnimationFrame(this.loop);
-            }
+            start() { if (this.running) return; this.running = true; this.lastTime = performance.now(); requestAnimationFrame(this.loop); }
+            stop(clearCanvas = true) { this.running = false; this.activeShow = false; this.resolveShow?.(); this.resolveShow = null; this.rockets = []; this.particles = []; this.trails = []; this.smokes = []; this.coreFlashes = []; this.screenFlash = 0; if (clearCanvas && this.ctx) this.ctx.clearRect(0, 0, this.width, this.height); }
 
-            stop(clearCanvas = true) {
-                this.running = false;
-                this.activeShow = false;
-                this.resolveShow?.();
-                this.resolveShow = null;
-                this.rockets = [];
-                this.particles = [];
-                this.trails = [];
-                this.smokes = [];
-                this.coreFlashes = [];
-                this.screenFlash = 0;
-                if (clearCanvas && this.ctx) {
-                    this.ctx.clearRect(0, 0, this.width, this.height);
-                }
-            }
-
+            /**
+             * 播放一次完整烟花表演，返回 Promise，在表演结束时 resolve
+             */
             playShow(duration = 6500) {
-                this.duration = duration;
-                this.elapsed = 0;
-                this.launchTimer = 0;
-                this.nextLaunchDelay = this.randomLaunchDelay();
-                this.activeShow = true;
-                this.launchBurst(5);
-                if (!this.running) {
-                    this.start();
-                }
-                return new Promise(resolve => {
-                    this.resolveShow = resolve;
-                });
+                this.duration = duration; this.elapsed = 0; this.launchTimer = 0; this.nextLaunchDelay = this.randomLaunchDelay(); this.activeShow = true; this.launchBurst(5); if (!this.running) this.start(); return new Promise(resolve => { this.resolveShow = resolve; });
             }
 
-            launchBurst(count) {
-                const lanes = Math.min(count, this.maxFireworks);
-                for (let i = 0; i < lanes; i++) {
-                    const delay = Math.random() * 300 + i * 80;
-                    setTimeout(() => {
-                        if (!this.running && !this.activeShow) return;
-                        const laneWidth = this.width / (lanes + 1);
-                        const preferredX = laneWidth * (i + 1) + (Math.random() - 0.5) * laneWidth * 0.3;
-                        this.spawnRocket(preferredX);
-                    }, delay);
-                }
-            }
+            launchBurst(count) { const lanes = Math.min(count, this.maxFireworks); for (let i = 0; i < lanes; i++) { const delay = Math.random() * 300 + i * 80; setTimeout(() => { if (!this.running && !this.activeShow) return; const laneWidth = this.width / (lanes + 1); const preferredX = laneWidth * (i + 1) + (Math.random() - 0.5) * laneWidth * 0.3; this.spawnRocket(preferredX); }, delay); } }
 
-            loop(timestamp) {
-                if (!this.running) return;
-                const dt = Math.min(0.05, Math.max(0.016, (timestamp - this.lastTime) / 1000 || 0.016));
-                this.lastTime = timestamp;
-                this.update(dt);
-                this.render();
-                requestAnimationFrame(this.loop);
-            }
+            loop(timestamp) { if (!this.running) return; const dt = Math.min(0.05, Math.max(0.016, (timestamp - this.lastTime) / 1000 || 0.016)); this.lastTime = timestamp; this.update(dt); this.render(); requestAnimationFrame(this.loop); }
 
             update(dt) {
                 if (this.activeShow) {
-                    this.launchTimer += dt * 1000;
-                    this.elapsed += dt * 1000;
-                    if (this.launchTimer >= this.nextLaunchDelay) {
-                        this.launchTimer = 0;
-                        this.nextLaunchDelay = this.randomLaunchDelay();
-                        this.spawnRocket();
-                    }
-                    if (this.elapsed >= this.duration) {
-                        this.activeShow = false;
-                    }
+                    this.launchTimer += dt * 1000; this.elapsed += dt * 1000;
+                    if (this.launchTimer >= this.nextLaunchDelay) { this.launchTimer = 0; this.nextLaunchDelay = this.randomLaunchDelay(); this.spawnRocket(); }
+                    if (this.elapsed >= this.duration) this.activeShow = false;
                 }
-
-                this.updateRockets(dt);
-                this.updateParticles(dt);
-                this.updateTrails(dt);
-                this.updateSmoke(dt);
-                this.updateCoreFlashes(dt);
-
-                const inactive = !this.activeShow &&
-                    this.rockets.length === 0 &&
-                    this.particles.length === 0 &&
-                    this.trails.length === 0 &&
-                    this.smokes.length === 0;
-
-                if (inactive && this.resolveShow) {
-                    const resolve = this.resolveShow;
-                    this.resolveShow = null;
-                    resolve();
-                }
+                this.updateRockets(dt); this.updateParticles(dt); this.updateTrails(dt); this.updateSmoke(dt); this.updateCoreFlashes(dt);
+                const inactive = !this.activeShow && this.rockets.length === 0 && this.particles.length === 0 && this.trails.length === 0 && this.smokes.length === 0;
+                if (inactive && this.resolveShow) { const resolve = this.resolveShow; this.resolveShow = null; resolve(); }
             }
 
             spawnRocket(preferredX) {
                 if (this.rockets.length >= this.maxFireworks) return;
-                const launchX = typeof preferredX === 'number'
-                    ? preferredX
-                    : this.width * (0.25 + Math.random() * 0.5);
+                const launchX = typeof preferredX === 'number' ? preferredX : this.width * (0.25 + Math.random() * 0.5);
                 const startY = this.height + 30;
-                const targetY = this.height * 0.3 + Math.random() * this.height * 0.1;
+                const targetY = this.height * 0.3 + randRange(0, this.height * 0.1);
                 const travel = startY - targetY;
                 const vy = -Math.sqrt(2 * 520 * travel);
                 const theme = this.randomColorTheme();
-                this.rockets.push({
-                    x: launchX,
-                    y: startY,
-                    vx: (Math.random() - 0.5) * 80,
-                    vy,
-                    life: 0,
-                    targetY,
-                    theme,
-                    wobbleSeed: Math.random() * Math.PI * 2,
-                    exploded: false,
-                    trailTick: 0
-                });
+                this.rockets.push({ x: launchX, y: startY, vx: (Math.random() - 0.5) * 80, vy, life: 0, targetY, theme, wobbleSeed: Math.random() * Math.PI * 2, exploded: false, trailTick: 0 });
             }
 
-            randomColorTheme() {
-                // 随机颜色主题：红、橙、黄、绿、蓝、紫
-                const themes = [
-                    { colors: ['#ffffff', '#ff0000', '#ff4444', '#cc0000'], smoke: 'rgba(255, 120, 120, 0.2)' }, // 红色
-                    { colors: ['#ffffff', '#ff8800', '#ffaa44', '#ff6600'], smoke: 'rgba(255, 180, 120, 0.2)' }, // 橙色
-                    { colors: ['#ffffff', '#ffd700', '#ffed4e', '#ffaa00'], smoke: 'rgba(255, 210, 130, 0.2)' }, // 黄色
-                    { colors: ['#ffffff', '#00ff00', '#44ff44', '#00cc00'], smoke: 'rgba(180, 255, 200, 0.16)' }, // 绿色
-                    { colors: ['#ffffff', '#0088ff', '#44aaff', '#0066cc'], smoke: 'rgba(140, 190, 255, 0.18)' }, // 蓝色
-                    { colors: ['#ffffff', '#aa00ff', '#cc44ff', '#8800cc'], smoke: 'rgba(210, 180, 255, 0.2)' }  // 紫色
-                ];
-                return themes[Math.floor(Math.random() * themes.length)];
-            }
+            // 保留颜色主题逻辑但更紧凑
+            randomColorTheme() { return choice(this.themeBase); }
+
             updateRockets(dt) {
                 for (let i = this.rockets.length - 1; i >= 0; i--) {
-                    const rocket = this.rockets[i];
-                    rocket.life += dt;
-                    rocket.vy += 120 * dt;
-                    rocket.vx += Math.sin(rocket.life * 6 + rocket.wobbleSeed) * 10 * dt;
-                    rocket.x += rocket.vx * dt;
-                    rocket.y += rocket.vy * dt;
-                    rocket.trailTick += dt;
-
-                    if (rocket.trailTick >= 0.015) {
-                        this.trails.push({
-                            x: rocket.x,
-                            y: rocket.y,
-                            alpha: 1,
-                            size: 2.5,
-                            decay: 3,
-                            color: rgbToString(hexToRgbColor(rocket.theme.colors[1]), 0.9)
-                        });
-                        rocket.trailTick = 0;
-                    }
-
-                    if ((rocket.y <= rocket.targetY || rocket.vy >= 0) && !rocket.exploded) {
-                        this.createExplosion(rocket.x, rocket.y, rocket.theme);
-                        this.rockets.splice(i, 1);
-                    } else if (rocket.y < -50) {
-                        this.rockets.splice(i, 1);
-                    }
+                    const rocket = this.rockets[i]; rocket.life += dt; rocket.vy += 120 * dt; rocket.vx += Math.sin(rocket.life * 6 + rocket.wobbleSeed) * 10 * dt; rocket.x += rocket.vx * dt; rocket.y += rocket.vy * dt; rocket.trailTick += dt;
+                    if (rocket.trailTick >= 0.015) { this.trails.push({ x: rocket.x, y: rocket.y, alpha: 1, size: 2.5, decay: 3, color: rgbToString(hexToRgbColor(rocket.theme.colors[1]), 0.9) }); rocket.trailTick = 0; }
+                    if ((rocket.y <= rocket.targetY || rocket.vy >= 0) && !rocket.exploded) { this.createExplosion(rocket.x, rocket.y, rocket.theme); this.rockets.splice(i, 1); } else if (rocket.y < -50) this.rockets.splice(i, 1);
                 }
             }
 
             getParticle(config) {
-                const pooled = this.particlePool.pop();
-                const particle = (pooled || new FireworkParticle(this)).init(config);
-                if (this.particles.length < this.maxParticles) {
-                    this.particles.push(particle);
-                }
+                const pooled = this.particlePool.pop(); const particle = (pooled || new FireworkParticle(this)).init(config); if (this.particles.length < this.maxParticles) this.particles.push(particle);
             }
 
+            /**
+             * 生成一层粒子（爆炸层）
+             * @param {number} x - 爆炸中心 x
+             * @param {number} y - 爆炸中心 y
+             * @param {Object} options - 层参数（count,speed,size,gravity,resistance,lifespan,colors,allowReburst）
+             */
             spawnParticleLayer(x, y, options) {
-                const {
-                    count,
-                    speed,
-                    size,
-                    gravity,
-                    resistance,
-                    lifespan,
-                    colors,
-                    allowReburst,
-                    upwardBias = 0.5 // 默认50%向上，50%向下
-                } = options;
-
+                const { count, speed, size, gravity, resistance, lifespan, colors, allowReburst, upwardBias = 0.5 } = options;
                 for (let i = 0; i < count; i++) {
-                    // 优化粒子分布，使用更自然的随机分布
-                    const bias = Math.pow(Math.random(), 0.3);
+                        const bias = Math.pow(Math.random(), 0.3);
                     const speedPerFrame = speed[0] + (speed[1] - speed[0]) * bias;
                     const velocity = speedPerFrame * 60;
-
-                    // 360度均匀散开，形成圆形爆炸
-                    const theta = Math.random() * Math.PI * 2;
-
-                    // 添加轻微的角度变化，让爆炸更自然
+                    const theta = randRange(0, Math.PI * 2);
                     const angleVariation = (Math.random() - 0.5) * 0.05;
                     const vx = Math.cos(theta + angleVariation) * velocity;
                     const vy = Math.sin(theta + angleVariation) * velocity;
-
-                    const sizeValue = size[0] + Math.random() * (size[1] - size[0]);
-                    const resistanceValue = resistance[0] + Math.random() * (resistance[1] - resistance[0]);
-                    const lifespanValue = lifespan[0] + Math.random() * (lifespan[1] - lifespan[0]);
-
-                    // 优化颜色选择，增加颜色变化
-                    const baseColor = colors[Math.floor(Math.random() * colors.length)];
+                    const sizeValue = randRange(size[0], size[1]);
+                    const resistanceValue = randRange(resistance[0], resistance[1]);
+                    const lifespanValue = randRange(lifespan[0], lifespan[1]);
+                    const baseColor = choice(colors);
                     const color = jitterRgb(baseColor, 25);
-
-                    this.getParticle({
-                        x,
-                        y,
-                        vx,
-                        vy,
-                        size: sizeValue,
-                        lifespan: lifespanValue,
-                        gravity,
-                        resistance: resistanceValue,
-                        color,
-                        allowReburst: allowReburst && Math.random() < 0.45,
-                        shrink: 0.94 + Math.random() * 0.03,
-                        decay: 0.008 + Math.random() * 0.025,
-                        alpha: 0.9 + Math.random() * 0.1
-                    });
+                    this.getParticle({ x, y, vx, vy, size: sizeValue, lifespan: lifespanValue, gravity, resistance: resistanceValue, color, allowReburst: allowReburst && Math.random() < 0.45, shrink: 0.94 + Math.random() * 0.03, decay: 0.008 + Math.random() * 0.025, alpha: 0.9 + Math.random() * 0.1 });
                 }
             }
 
             createExplosion(x, y, theme) {
                 const palette = theme.colors.map(hexToRgbColor);
-
-                // 移除中心闪光效果，爆炸点立即消失，不留晕影
-                // this.coreFlashes.push(...) - 已移除
-                // this.screenFlash - 已移除
-
-                // 生成大量彩色粒子，向四周随机方向扩散
-                // 第一层：快速核心粒子
-                this.spawnParticleLayer(x, y, {
-                    count: 120, // 增加数量：80 -> 120
-                    speed: [5, 14], // 增大范围：4-10 -> 5-14
-                    size: [2.5, 5],
-                    gravity: 0.15, // 重力影响
-                    resistance: [0.96, 0.99], // 空气阻力
-                    lifespan: [1.5, 2.5],
-                    colors: palette,
-                    allowReburst: false,
-                    upwardBias: 0.0 // 360度均匀散开 
-                });
-
-                // 第二层：主要爆炸粒子
-                this.spawnParticleLayer(x, y, {
-                    count: 180, // 增加数量：120 -> 180
-                    speed: [4, 12], // 增大范围：3-8 -> 4-12
-                    size: [2, 4],
-                    gravity: 0.16,
-                    resistance: [0.97, 0.99],
-                    lifespan: [1.8, 2.8],
-                    colors: palette,
-                    allowReburst: false,
-                    upwardBias: 0.0
-                });
-
-                // 第三层：细节粒子
-                this.spawnParticleLayer(x, y, {
-                    count: 150, // 增加数量：100 -> 150
-                    speed: [3, 10], // 增大范围：2-6 -> 3-10
-                    size: [1.5, 3],
-                    gravity: 0.17,
-                    resistance: [0.98, 0.995],
-                    lifespan: [2.0, 3.0],
-                    colors: palette,
-                    allowReburst: false,
-                    upwardBias: 0.0
-                });
-
-                // 烟雾效果
-                for (let i = 0; i < 30; i++) {
-                    this.smokes.push({
-                        x: x + (Math.random() - 0.5) * 20,
-                        y: y + (Math.random() - 0.5) * 20,
-                        vx: (Math.random() - 0.5) * 15,
-                        vy: -10 - Math.random() * 15,
-                        alpha: Math.random() * 0.1,
-                        decay: 0.12 + Math.random() * 0.08,
-                        size: 15 + Math.random() * 25,
-                        color: theme.smoke
-                    });
-                }
+                this.spawnParticleLayer(x, y, { count: 120, speed: [5, 14], size: [2.5, 5], gravity: 0.15, resistance: [0.96, 0.99], lifespan: [1.5, 2.5], colors: palette, allowReburst: false, upwardBias: 0.0 });
+                this.spawnParticleLayer(x, y, { count: 180, speed: [4, 12], size: [2, 4], gravity: 0.16, resistance: [0.97, 0.99], lifespan: [1.8, 2.8], colors: palette, allowReburst: false, upwardBias: 0.0 });
+                this.spawnParticleLayer(x, y, { count: 150, speed: [3, 10], size: [1.5, 3], gravity: 0.17, resistance: [0.98, 0.995], lifespan: [2.0, 3.0], colors: palette, allowReburst: false, upwardBias: 0.0 });
+                for (let i = 0; i < 30; i++) this.smokes.push({ x: x + (Math.random() - 0.5) * 20, y: y + (Math.random() - 0.5) * 20, vx: (Math.random() - 0.5) * 15, vy: -10 - Math.random() * 15, alpha: Math.random() * 0.1, decay: 0.12 + Math.random() * 0.08, size: 15 + Math.random() * 25, color: theme.smoke });
             }
 
-            createSubExplosion(x, y, baseColor) {
-                const palette = [
-                    baseColor,
-                    hexToRgbColor('#ffffff'),
-                    jitterRgb(baseColor, 30)
-                ];
-                this.spawnParticleLayer(x, y, {
-                    count: 22 + Math.floor(Math.random() * 18),
-                    speed: [2, 4], // 适中的速度，大致在范围内
-                    size: [1.2, 3],
-                    gravity: 0.17, // 适中的重力，形成自然下坠
-                    resistance: [0.98, 0.995], // 适中的阻力
-                    lifespan: [1.5, 2.5], // 增加生命周期
-                    colors: palette,
-                    allowReburst: false,
-                    upwardBias: 0.4
-                });
+            createSubExplosion(x, y, baseColor) { const palette = [baseColor, hexToRgbColor('#ffffff'), jitterRgb(baseColor, 30)]; this.spawnParticleLayer(x, y, { count: 22 + Math.floor(Math.random() * 18), speed: [2, 4], size: [1.2, 3], gravity: 0.17, resistance: [0.98, 0.995], lifespan: [1.5, 2.5], colors: palette, allowReburst: false, upwardBias: 0.4 }); }
 
-                // 移除小闪光，爆炸点立即消失
-                // this.coreFlashes.push(...) - 已移除
-            }
-            updateParticles(dt) {
-                for (let i = this.particles.length - 1; i >= 0; i--) {
-                    const particle = this.particles[i];
-                    if (!particle.update(dt)) {
-                        this.particles.splice(i, 1);
-                    }
-                }
-            }
+            updateParticles(dt) { for (let i = this.particles.length - 1; i >= 0; i--) { const particle = this.particles[i]; if (!particle.update(dt)) this.particles.splice(i, 1); } }
+            updateTrails(dt) { for (let i = this.trails.length - 1; i >= 0; i--) { const trail = this.trails[i]; trail.alpha -= dt * trail.decay; trail.size = Math.max(0, trail.size - dt * 2.5); if (trail.alpha <= 0 || trail.size <= 0) this.trails.splice(i, 1); } }
+            updateSmoke(dt) { for (let i = this.smokes.length - 1; i >= 0; i--) { const smoke = this.smokes[i]; smoke.vx *= 0.98; smoke.vy = smoke.vy * 0.98 - 5 * dt; smoke.x += smoke.vx * dt; smoke.y += smoke.vy * dt; smoke.size += dt * 10; smoke.alpha -= smoke.decay * dt; if (smoke.alpha <= 0) this.smokes.splice(i, 1); } }
 
-            updateTrails(dt) {
-                for (let i = this.trails.length - 1; i >= 0; i--) {
-                    const trail = this.trails[i];
-                    trail.alpha -= dt * trail.decay;
-                    trail.size = Math.max(0, trail.size - dt * 2.5);
-                    if (trail.alpha <= 0 || trail.size <= 0) {
-                        this.trails.splice(i, 1);
-                    }
-                }
-            }
-
-            updateSmoke(dt) {
-                for (let i = this.smokes.length - 1; i >= 0; i--) {
-                    const smoke = this.smokes[i];
-                    smoke.vx *= 0.98;
-                    smoke.vy = smoke.vy * 0.98 - 5 * dt;
-                    smoke.x += smoke.vx * dt;
-                    smoke.y += smoke.vy * dt;
-                    smoke.size += dt * 10;
-                    smoke.alpha -= smoke.decay * dt;
-                    if (smoke.alpha <= 0) {
-                        this.smokes.splice(i, 1);
-                    }
-                }
-            }
-
-            updateCoreFlashes(dt) {
-                for (let i = this.coreFlashes.length - 1; i >= 0; i--) {
-                    const flash = this.coreFlashes[i];
-                    flash.life += dt;
-
-                    // 快速扩散，快速消散
-                    const maxRadius = flash.maxRadius || 60;
-                    const expansionSpeed = flash.life < 0.08 ? 150 : 80; // 初始快速扩散
-                    flash.radius = Math.min(maxRadius, flash.radius + dt * expansionSpeed);
-
-                    // 快速衰减，模拟真实快速消散
-                    const fadeStart = 2; // 更早开始衰减
-                    if (flash.life < fadeStart) {
-                        flash.alpha = Math.min(flash.alpha, 0.8);
-                    } else {
-                        // 使用更激进的衰减曲线，快速消散
-                        const fadeDuration = 0.25; // 缩短衰减时间
-                        const fadeProgress = Math.min(1, (flash.life - fadeStart) / fadeDuration);
-                        // 使用三次方衰减，让消散更快
-                        flash.alpha = flash.alpha * (1 - fadeProgress * fadeProgress * fadeProgress);
-                    }
-
-                    if (flash.alpha <= 0.01 || flash.radius >= maxRadius) {
-                        this.coreFlashes.splice(i, 1);
-                    }
-                }
-                this.screenFlash *= 0.75; // 加快屏幕闪光消散
-            }
+            updateCoreFlashes(dt) { for (let i = this.coreFlashes.length - 1; i >= 0; i--) { const flash = this.coreFlashes[i]; flash.life += dt; const maxRadius = flash.maxRadius || 60; const expansionSpeed = flash.life < 0.08 ? 150 : 80; flash.radius = Math.min(maxRadius, flash.radius + dt * expansionSpeed); const fadeStart = 2; if (flash.life < fadeStart) flash.alpha = Math.min(flash.alpha, 0.8); else { const fadeDuration = 0.25; const fadeProgress = Math.min(1, (flash.life - fadeStart) / fadeDuration); flash.alpha = flash.alpha * (1 - fadeProgress * fadeProgress * fadeProgress); } if (flash.alpha <= 0.01 || flash.radius >= maxRadius) this.coreFlashes.splice(i, 1); } this.screenFlash *= 0.75; }
 
             render() {
                 const ctx = this.ctx;
                 if (!ctx) return;
 
                 ctx.globalCompositeOperation = 'source-over';
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; // 稍微减少背景暗化，让烟花更亮
-                ctx.fillRect(0, 0, this.width, this.height);
+                ctx.clearRect(0, 0, this.width, this.height);   // ← 透明底
                 this.drawStars(ctx);
 
                 // 使用lighter混合模式让烟花更亮更自然
@@ -1456,15 +1089,8 @@
             }
 
             drawStars(ctx) {
-                ctx.save();
-                ctx.fillStyle = '#ffffff';
-                this.stars.forEach(star => {
-                    ctx.globalAlpha = star.alpha;
-                    ctx.beginPath();
-                    ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-                    ctx.fill();
-                });
-                ctx.restore();
+                // 不再绘制烟花 Canvas 自己的星星，背景直接使用 Three.js 星空
+                return;
             }
 
             drawRockets(ctx) {
@@ -1542,8 +1168,24 @@
             console.log('开始烟花效果');
             currentPhase = 'fireworks';
 
+            // 保持倒计时的星空可见，以便烟花与蛋糕间平滑衔接（不要销毁）
+            if (starField) {
+                starField.visible = true;
+                console.log('fireworksTransition: starField kept visible for smooth transition');
+            }
+            // 隐藏金色微尘和任何大粒子背景，避免与烟花视觉冲突
+            if (goldDust) {
+                goldDust.visible = false;
+            }
+            // 确保主粒子系统不干扰背景（隐藏或移出）
             if (particleSystem) {
                 particleSystem.visible = false;
+                // 同时把粒子移出以防可见残影
+                if (particleSystem.geometry && particleSystem.geometry.attributes.position) {
+                    const pa = particleSystem.geometry.attributes.position.array;
+                    for (let i = 0; i < pa.length; i++) pa[i] = OFFSCREEN_POS;
+                    particleSystem.geometry.attributes.position.needsUpdate = true;
+                }
             }
 
             if (camera) {
@@ -1586,15 +1228,34 @@
         async function transitionToMainScene() {
             console.log('开始过渡到主场景');
             currentPhase = 'main';
+
+            // 主场景：使用倒计时星空作为静态背景（隐藏大粒子背景）
+            if (starField) {
+                starField.visible = true;
+                console.log('transitionToMainScene: starField visible (countdown background used for main)');
+            }
+            if (goldDust) {
+                goldDust.visible = false;
+            }
+            // 如果还有残留大粒子系统，移出或隐藏
+            if (particleSystem) {
+                particleSystem.visible = false;
+                if (particleSystem.geometry && particleSystem.geometry.attributes.position) {
+                    const pa = particleSystem.geometry.attributes.position.array;
+                    for (let i = 0; i < pa.length; i++) pa[i] = OFFSCREEN_POS;
+                    particleSystem.geometry.attributes.position.needsUpdate = true;
+                }
+            }
+
             const camCfg = CONFIG.CAMERA;
             const targetCameraZ = camCfg.TARGET_Z_MAIN;
-            const duration = 2500;
+            const duration = 1000;  // 缩短转场时间，从2500ms减少到1600ms
 
             if (gsap && typeof gsap.to === 'function') {
                 gsap.to(camera.position, {
                     x: 0, y: 0, z: targetCameraZ,
                     duration: duration / 1000,
-                    ease: 'power2.out'
+                    ease: 'sine.out'  // 使用更平滑的sine缓动，让动画更丝滑
                 });
                 await new Promise(resolve => setTimeout(resolve, duration));
             } else {
@@ -1606,7 +1267,8 @@
                     const animate = () => {
                         const elapsed = Date.now() - startTime;
                         const progress = Math.min(elapsed / duration, 1);
-                        const easeProgress = 1 - Math.pow(1 - progress, 2);
+                        // 使用sine缓动函数，让动画更平滑丝滑
+                        const easeProgress = Math.sin(progress * Math.PI / 2);
 
                         camera.position.x = startPos.x + (targetPos.x - startPos.x) * easeProgress;
                         camera.position.y = startPos.y + (targetPos.y - startPos.y) * easeProgress;
@@ -1622,75 +1284,350 @@
                 });
             }
 
-            scene.remove(particleSystem);
-            createCakeStructure();
-            createGoldDust();
-            createStarField();
-            createFloatingText();
+            if (particleSystem) {
+                scene.remove(particleSystem);
+                particleSystem.geometry?.dispose?.();
+                particleSystem.material?.dispose?.();
+                particleSystem = null;
+            }
 
-            await new Promise(resolve => setTimeout(resolve, 300));
+            // 确保蛋糕场景带上倒计时的星空背景：如果之前已被销毁则重建
+            if (!starField) {
+                try {
+                    createStarField();
+                    console.log('transitionToMainScene: recreated starField for cake');
+                } catch (e) {
+                    console.warn('transitionToMainScene: failed to recreate starField', e);
+                }
+            } else {
+                starField.visible = true;
+                console.log('transitionToMainScene: starField ensured visible for cake');
+            }
 
-            if (DOM.uploadBtn) DOM.uploadBtn.classList.remove('hidden');
-            if (DOM.cameraPreview) DOM.cameraPreview.classList.remove('hidden');
+            if (cakePoints) {
+                cakePoints.visible = true;
+                // 当蛋糕可见时立即开始持续自转：单圈时长为 10 秒（速度 = 2π / 5）
+                try {
+                    CONFIG.CAKE.ROTATION_SPEED = (Math.PI * 2) / 12; // 单圈 5 秒
+                    cakeAutoRotate = true;
+                    console.log('蛋糕展示：启用持续自转（单圈 12s）', CONFIG.CAKE.ROTATION_SPEED);
+                } catch (e) {
+                    console.warn('启用自转失败', e);
+                }
+            }
+            if (floatingTextMesh) {
+                floatingTextMesh.visible = true;
+            }
+            // 仅在主场景显示蜡烛，并播放点燃动画
+            if (cakeCandleGroup) {
+                cakeCandleGroup.visible = true;
+                const flame = cakeCandleGroup.userData?.flame;
+                if (flame) {
+                    // 使用 GSAP 动画（若可用）否则使用 requestAnimationFrame
+                    const animateFlame = (duration = 3000) => {
+                        if (gsap && typeof gsap.to === 'function') {
+                            return new Promise(resolve => {
+                                gsap.to(flame.material, { opacity: 1, duration: duration / 1000, ease: 'power2.out' });
+                                gsap.to(flame.scale, { x: 24, y: 48, duration: duration / 1000, ease: 'back.out(1.2)', onComplete: resolve });
+                            });
+                        }
+                        return new Promise(resolve => {
+                            const start = performance.now();
+                            const dur = duration;
+                            const startOpacity = flame.material.opacity ?? 0;
+                            const startSX = flame.scale.x;
+                            const startSY = flame.scale.y;
+                            const targetSX = 24;
+                            const targetSY = 48;
+                            const tick = (now) => {
+                                const t = Math.min(1, (now - start) / dur);
+                                const ease = 1 - Math.pow(1 - t, 2);
+                                if (flame.material) flame.material.opacity = startOpacity + (1 - startOpacity) * ease;
+                                flame.scale.x = startSX + (targetSX - startSX) * ease;
+                                flame.scale.y = startSY + (targetSY - startSY) * ease;
+                                if (t < 1) requestAnimationFrame(tick);
+                                else resolve();
+                            };
+                            requestAnimationFrame(tick);
+                        });
+                    };
 
-            showStatus('欢迎来到2026！', 3000);
+                    try { await animateFlame(3000); } catch (e) { console.warn('火焰动画失败', e); }
+                }
+            }
+
+            if (DOM.canvasContainer) {
+                // 不再淡出 canvas，以保证星空背景从开始到结束保持不变
+                // DOM.canvasContainer.classList.add('fade-out');
+            }
+
+
+            if (DOM.guiPanel) {
+                DOM.guiPanel.classList.remove('gui-hidden');
+            }
+
+
+            showStatus('梦幻光粒蛋糕已上线', 3000);
+
+            // 开始：主场景进入后，执行一次 360° Y 轴旋转（优先使用 GSAP，否则使用内置动画）
+            async function rotateCake360(duration = 4000) {
+                if (!cakeGroup) {
+                    console.warn('rotateCake360: cakeGroup 未定义');
+                    return;
+                }
+
+                // 确保可见并记录初始状态，便于调试
+                cakeGroup.visible = true;
+                const start = cakeGroup.rotation.y;
+                const target = start + Math.PI * 2;
+                console.log('rotateCake360: start', { start, target, duration, gsapLoaded: !!(gsap && typeof gsap.to === 'function') });
+
+                if (gsap && typeof gsap.to === 'function') {
+                    return new Promise(resolve => {
+                        gsap.to(cakeGroup.rotation, {
+                            y: target,
+                            duration: duration / 1000,
+                            ease: 'power2.inOut',
+                            onComplete: () => {
+                                console.log('rotateCake360: done (gsap)', cakeGroup.rotation.y);
+                                resolve();
+                            }
+                        });
+                    });
+                }
+
+                return new Promise(resolve => {
+                    const t0 = performance.now();
+                    let lastLoggedStep = -1;
+                    const tick = (now) => {
+                        const t = Math.min(1, (now - t0) / duration);
+                        const ease = 1 - Math.pow(1 - t, 2);
+                        cakeGroup.rotation.y = start + (target - start) * ease;
+
+                        // 每 10% 记录一次进度，避免大量日志
+                        const step = Math.floor(t * 10);
+                        if (step !== lastLoggedStep) {
+                            lastLoggedStep = step;
+                            console.log('rotateCake360 progress', Math.round(t * 100) + '%', 'rotationY=', cakeGroup.rotation.y);
+                        }
+
+                        if (t < 1) requestAnimationFrame(tick);
+                        else {
+                            console.log('rotateCake360: done', cakeGroup.rotation.y);
+                            resolve();
+                        }
+                    };
+                    requestAnimationFrame(tick);
+                });
+            }
+
+            // 在控制台暴露一个便捷触发函数，用于调试/手动触发旋转
+            window.rotateCakeOnce = (ms = 2000) => rotateCake360(ms).catch(e => console.warn('蛋糕旋转失败:', e));
+
+            // 改为启用持续自转（代替单次旋转），并暴露控制方法
+            cakeAutoRotate = true;
+            console.log('启用蛋糕持续自转，速度(rad/s)=', CONFIG.CAKE.ROTATION_SPEED);
+            window.toggleCakeAutoRotate = (force) => { if (typeof force === 'boolean') cakeAutoRotate = force; else cakeAutoRotate = !cakeAutoRotate; console.log('cakeAutoRotate=', cakeAutoRotate); return cakeAutoRotate; };
+            window.setCakeRotationSpeed = (v) => { CONFIG.CAKE.ROTATION_SPEED = Number(v); console.log('cake rotation speed set to', CONFIG.CAKE.ROTATION_SPEED); };
         }
 
         function createCakeStructure() {
             const cfg = CONFIG.CAKE;
             const layerCount = cfg.LAYER_COUNT;
-            const instancesPerLayer = cfg.INSTANCES_PER_LAYER;
-            const geometries = [
-                new THREE.SphereGeometry(0.5, 8, 8),
-                new THREE.CylinderGeometry(0.3, 0.3, 1, 8),
-                new THREE.ConeGeometry(0.4, 1, 8),
+            const pointsPerLayer = cfg.POINTS_PER_LAYER;
+            // 增加底层密度：使用 per-layer multipliers（底层更密）
+            const layerMultipliers = [2.4, 1.0, 0.9];
+            const layerPointsArr = [];
+            let totalPoints = 0;
+            for (let li = 0; li < layerCount; li++) {
+                const mult = layerMultipliers[li] || 1;
+                const cnt = Math.max(8, Math.floor(pointsPerLayer * mult));
+                layerPointsArr.push(cnt);
+                totalPoints += cnt;
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(totalPoints * 3);
+            const colors = new Float32Array(totalPoints * 3);
+            const basePositions = new Float32Array(totalPoints * 3);
+            const targetPositions = new Float32Array(totalPoints * 3);
+
+            if (cakeGroup) {
+                scene.remove(cakeGroup);
+            }
+            cakeGroup = new THREE.Group();
+            // 缩小整体蛋糕到 85%，避免占用页面中心过多空间
+            cakeGroup.scale.set(0.85, 0.85, 0.85);
+            // 向下移动整组蛋糕以与浮字拉开距离（通过 CONFIG.CAKE.VERTICAL_OFFSET 配置）
+            cakeGroup.position.y = cfg.VERTICAL_OFFSET || 0;
+
+            const colorPalette = [
+                new THREE.Color(0xffd700),
+                new THREE.Color(0xff9a4d),
+                new THREE.Color(0xff5f5f),
+                new THREE.Color(0xffc2ff),
+                new THREE.Color(0xffffff)
             ];
-            const colors = [0xffd700, 0xc0c0c0, 0xff1493, 0x00ff7f];
 
-            instancedMesh = geometries.map((geo, idx) => {
-                const mesh = new THREE.InstancedMesh(
-                    geo,
-                    new THREE.MeshPhysicalMaterial({
-                        color: colors[idx % colors.length],
-                        metalness: 0.9,
-                        roughness: 0.1,
-                        emissive: colors[idx % colors.length],
-                        emissiveIntensity: 0.3,
-                    }),
-                    instancesPerLayer
-                );
+            // 三层蛋糕配置：从底层（最宽）到顶层（最窄），蜡烛放在最上层
+            // 1. 可调参数
+            const OVERLAP = 20; // 每层之间只重叠 20 单位（想再少改 10 或 5）
 
-                const matrix = new THREE.Matrix4();
-                const positions = new Float32Array(instancesPerLayer * 3);
-                const layerDivisor = instancesPerLayer / layerCount;
+            // 2. 原始尺寸
+            const radiusArr = [380, 280, 200];
+            const thickArr  = [160, 130, 110];
 
-                for (let i = 0; i < instancesPerLayer; i++) {
-                    const layer = Math.floor(i / layerDivisor);
-                    const radius = 100 + layer * 80;
-                    const angle = (Math.PI * 2 * i) / layerDivisor;
-                    const height = -150 + layer * 100 + (Math.random() - 0.5) * 20;
-                    const cosAngle = Math.cos(angle);
-                    const sinAngle = Math.sin(angle);
+            // 3. 逐层计算
+            let layerConfigs = [];
+            let bottom = 0; // 最底层从地面 0 开始
+            for (let i = 0; i < 3; i++) {
+            const thickness = thickArr[i];
+            const height = bottom + thickness / 2; // 圆柱中心
+            layerConfigs.push({
+                radius: radiusArr[i],
+                height: height,
+                thickness: thickness
+            });
+            bottom += thickness - OVERLAP; // 下一层底面只往上抬 (thickness - 重叠)
+            }
 
-                    const x = cosAngle * radius + (Math.random() - 0.5) * 50;
-                    const y = height;
-                    const z = sinAngle * radius + (Math.random() - 0.5) * 50;
+            // 逐层生成，底层使用更多点数
+            let idx = 0;
+            for (let layer = 0; layer < layerCount; layer++) {
+                const layerCfg = layerConfigs[layer] || { radius: 100 + layer * 80, height: -150 + layer * 100, thickness: 60 };
+                const radius = layerCfg.radius;
+                const height = layerCfg.height;
+                const thickness = layerCfg.thickness;
 
-                    const posIdx = i * 3;
+                const pointsThisLayer = layerPointsArr[layer] || pointsPerLayer;
+                for (let i = 0; i < pointsThisLayer; i++) {
+                    const posIdx = idx * 3;
+                    const angle = (Math.PI * 2 * i) / pointsThisLayer + Math.random() * 0.25;
+                    const radialOffset = (Math.random() - 0.5) * 35;
+                    const heightOffset = (Math.random() - 0.5) * thickness;
+                    const currentRadius = radius + radialOffset;
+
+                    const x = Math.cos(angle) * currentRadius;
+                    const y = height + heightOffset;
+                    const z = Math.sin(angle) * currentRadius;
+
                     positions[posIdx] = x;
                     positions[posIdx + 1] = y;
                     positions[posIdx + 2] = z;
+                    basePositions[posIdx] = x;
+                    basePositions[posIdx + 1] = y;
+                    basePositions[posIdx + 2] = z;
+                    targetPositions[posIdx] = x;
+                    targetPositions[posIdx + 1] = y;
+                    targetPositions[posIdx + 2] = z;
 
-                    matrix.setPosition(x, y, z);
-                    matrix.scale(1 + Math.random() * 0.5);
-                    mesh.setMatrixAt(i, matrix);
+                    const color = colorPalette[(layer + Math.floor(Math.random() * colorPalette.length)) % colorPalette.length].clone();
+                    color.offsetHSL((Math.random() - 0.5) * 0.05, 0.1, 0.1);
+                    colors[posIdx] = color.r;
+                    colors[posIdx + 1] = color.g;
+                    colors[posIdx + 2] = color.b;
+
+                    idx++;
                 }
+            }
 
-                mesh.instanceMatrix.needsUpdate = true;
-                scene.add(mesh);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-                return { mesh, positions, targetPositions: new Float32Array(positions) };
+            // 生成一个小圆形渐变纹理，让 Points 看起来像小球（有轻微高光）
+            const particleCanvas = document.createElement('canvas');
+            particleCanvas.width = 64;
+            particleCanvas.height = 64;
+            const pctx = particleCanvas.getContext('2d');
+            const grad = pctx.createRadialGradient(32, 24, 2, 32, 24, 30);
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(0.2, 'rgba(255,255,255,0.9)');
+            grad.addColorStop(0.5, 'rgba(255,255,255,0.6)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            pctx.clearRect(0, 0, 64, 64);
+            pctx.fillStyle = grad;
+            pctx.beginPath();
+            pctx.arc(32, 24, 30, 0, Math.PI * 2);
+            pctx.fill();
+
+            const particleTexture = new THREE.CanvasTexture(particleCanvas);
+            particleTexture.minFilter = THREE.LinearFilter;
+            particleTexture.magFilter = THREE.LinearFilter;
+
+            const material = new THREE.PointsMaterial({
+                size: 8,
+                map: particleTexture,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.95,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: true
             });
+
+            cakePoints = new THREE.Points(geometry, material);
+            cakePoints.visible = false;
+            cakePointCount = totalPoints;
+            cakeBasePositions = basePositions;
+            cakeTargetPositions = targetPositions;
+            cakePositionAttribute = geometry.getAttribute('position');
+            cakeGroup.add(cakePoints);
+
+            const topLayerIdx = Math.min(layerCount - 1, layerConfigs.length - 1);
+            const topLayerCfg = layerConfigs[topLayerIdx] || { radius: 100, height: -150, thickness: 60 };
+
+            // 在顶层添加蜡烛（圆柱 + 火焰 Sprite）
+            try {
+                const candleGroup = new THREE.Group();
+                // 默认隐藏蜡烛，只有进入主场景时显示
+                candleGroup.visible = false;
+
+                const candleRadius = 8;
+                const candleHeight = 40;
+                const candleGeo = new THREE.CylinderGeometry(candleRadius, candleRadius, candleHeight, 12);
+                const candleMat = new THREE.MeshStandardMaterial({ color: 0xfffdf5, metalness: 0.1, roughness: 0.7, emissive: 0x000000, emissiveIntensity: 0 });
+                const candle = new THREE.Mesh(candleGeo, candleMat);
+                candle.position.set(0, topLayerCfg.height + topLayerCfg.thickness + candleHeight / 2 - 30, 0);
+                candleGroup.add(candle);
+
+                // 火焰：使用 Sprite，靠近黄色/橙色渐变
+                const flameCanvas = document.createElement('canvas');
+                flameCanvas.width = 64;
+                flameCanvas.height = 128;
+                const fctx = flameCanvas.getContext('2d');
+                const flameGrad = fctx.createLinearGradient(32, 8, 32, 120);
+                flameGrad.addColorStop(0, 'rgba(255,255,200,1)');
+                flameGrad.addColorStop(0.3, 'rgba(255,200,80,0.95)');
+                flameGrad.addColorStop(0.6, 'rgba(255,120,40,0.8)');
+                flameGrad.addColorStop(1, 'rgba(255,80,20,0)');
+                fctx.fillStyle = flameGrad;
+                fctx.beginPath();
+                fctx.moveTo(32, 4);
+                fctx.bezierCurveTo(8, 40, 20, 80, 32, 120);
+                fctx.bezierCurveTo(44, 80, 56, 40, 32, 4);
+                fctx.closePath();
+                fctx.fill();
+
+                const flameTex = new THREE.CanvasTexture(flameCanvas);
+                flameTex.minFilter = THREE.LinearFilter;
+                const spriteMat = new THREE.SpriteMaterial({ map: flameTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+                const flame = new THREE.Sprite(spriteMat);
+                // 初始缩小并透明，等待点燃动画
+                flame.scale.set(8, 16, 1);
+                if (flame.material) flame.material.opacity = 0;
+                flame.position.set(0, candle.position.y + candleHeight / 2 + 18, 0);
+                candleGroup.add(flame);
+
+                // 保存对火焰的引用，便于动画控制
+                candleGroup.userData.flame = flame;
+
+                cakeGroup.add(candleGroup);
+                cakeCandleGroup = candleGroup;
+            } catch (e) {
+                console.warn('创建蜡烛失败:', e);
+            }
+
+            scene.add(cakeGroup);
         }
 
         function createGoldDust() {
@@ -1718,7 +1655,10 @@
                     blending: THREE.AdditiveBlending,
                 })
             );
-            scene.add(dust);
+            // 保存引用以便控制（默认隐藏，避免覆盖星空背景）
+            goldDust = dust;
+            goldDust.visible = false;
+            scene.add(goldDust);
         }
 
         function createStarField() {
@@ -1736,312 +1676,53 @@
             }
 
             starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-            const stars = new THREE.Points(
-                starGeometry,
-                new THREE.PointsMaterial({
-                    size: 2,
-                    color: 0xffffff,
-                    transparent: true,
-                    opacity: 0.8,
-                })
-            );
-            scene.add(stars);
+            const starMaterial = new THREE.PointsMaterial({
+                size: 2,
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.8,
+            });
+            // 保存为全局引用，保证全程可见且不被其他效果覆盖
+            starField = new THREE.Points(starGeometry, starMaterial);
+            starField.name = 'starField';
+            starField.renderOrder = 0;
+            starField.visible = true;
+            scene.add(starField);
         }
 
         function createFloatingText() {
             const cfg = CONFIG.CAKE;
-            const textPositions = textToPositions(cfg.FLOATING_TEXT, cfg.FLOATING_TEXT_SIZE);
+            // 使用正常字体（非粗体），并增加字间距（30像素）
+            const textPositions = textToPositions(cfg.FLOATING_TEXT, cfg.FLOATING_TEXT_SIZE, 1.0, 30, false);
             const textGeometry = new THREE.BufferGeometry();
             textGeometry.setAttribute('position', new THREE.BufferAttribute(textPositions, 3));
 
-            const textMesh = new THREE.Points(
-                textGeometry,
-                new THREE.PointsMaterial({
-                    size: 4,
-                    color: CONFIG.PARTICLE.COLOR,
-                    transparent: true,
-                    opacity: 0.9,
-                    blending: THREE.AdditiveBlending,
-                })
-            );
-            textMesh.position.y = cfg.FLOATING_TEXT_Y;
-            scene.add(textMesh);
-        }
-
-        // ==================== 手势交互 ====================
-        async function initHandTracking() {
-            cameraVideo = document.getElementById('camera-video');
-            cameraCanvas = document.getElementById('camera-canvas');
-            if (!cameraCanvas) return;
-            cameraCtx = cameraCanvas.getContext('2d');
-            cameraCanvas.width = 200;
-            cameraCanvas.height = 150;
-
-            const hands = new Hands({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+            // 使用非加法混合并关闭视距缩放，让文字在屏幕空间更清晰且不受 bloom 过度发光影响
+            const floatMat = new THREE.PointsMaterial({
+                size: 6,
+                color: CONFIG.PARTICLE.COLOR,
+                transparent: false,
+                opacity: 1,
+                blending: THREE.NormalBlending,
+                sizeAttenuation: false,
+                depthWrite: false
             });
-
-            hands.setOptions({
-                maxNumHands: 2,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.7,
-                minTrackingConfidence: 0.7,
-            });
-
-            hands.onResults((results) => {
-                if (!cameraCtx) return;
-
-                cameraCtx.save();
-                cameraCtx.clearRect(0, 0, cameraCanvas.width, cameraCanvas.height);
-                cameraCtx.drawImage(results.image, 0, 0, cameraCanvas.width, cameraCanvas.height);
-
-                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                    const landmarks = results.multiHandLandmarks[0];
-                    const handedness = results.multiHandedness[0];
-
-                    // 绘制手部骨骼
-                    cameraCtx.strokeStyle = '#ffd700';
-                    cameraCtx.lineWidth = 2;
-
-                    const connections = [
-                        [0, 1, 2, 3, 4],
-                        [0, 5, 6, 7, 8],
-                        [5, 9, 10, 11, 12],
-                        [9, 13, 14, 15, 16],
-                        [13, 17, 18, 19, 20],
-                        [0, 17]
-                    ];
-
-                    connections.forEach(connection => {
-                        for (let i = 0; i < connection.length - 1; i++) {
-                            const start = landmarks[connection[i]];
-                            const end = landmarks[connection[i + 1]];
-                            cameraCtx.beginPath();
-                            cameraCtx.moveTo(start.x * cameraCanvas.width, start.y * cameraCanvas.height);
-                            cameraCtx.lineTo(end.x * cameraCanvas.width, end.y * cameraCanvas.height);
-                            cameraCtx.stroke();
-                        }
-                    });
-
-                    // 识别手势
-                    detectGesture(landmarks);
-                }
-
-                cameraCtx.restore();
-            });
-
-            const camera = new Camera(cameraVideo, {
-                onFrame: async () => {
-                    await hands.send({ image: cameraVideo });
-                },
-                width: 1280,
-                height: 720,
-            });
-
-            await camera.start();
-            handTracker = { hands, camera };
-        }
-
-        function detectGesture(landmarks) {
-            // 计算手指数量
-            const fingerTips = [4, 8, 12, 16, 20];
-            const fingerBases = [3, 6, 10, 14, 18];
-            let fingerCount = 0;
-
-            fingerTips.forEach((tip, idx) => {
-                if (landmarks[tip].y < landmarks[fingerBases[idx]].y) {
-                    fingerCount++;
-                }
-            });
-
-            // 计算手掌中心
-            const center = landmarks.reduce(
-                (sum, point) => {
-                    sum.x += point.x;
-                    sum.y += point.y;
-                    sum.z += point.z;
-                    return sum;
-                },
-                { x: 0, y: 0, z: 0 }
-            );
-            center.x /= landmarks.length;
-            center.y /= landmarks.length;
-            center.z /= landmarks.length;
-
-            handCenter = {
-                x: (center.x - 0.5) * 2,
-                y: (0.5 - center.y) * 2,
-                z: center.z
-            };
-
-            // 判断手势（带防抖）
-            const now = Date.now();
-            if (now - lastGestureTime < CONFIG.GESTURE.COOLDOWN) return;
-
-            if (fingerCount <= 1 && handState !== 'fist') {
-                handState = 'fist';
-                lastGestureTime = now;
-                showStatus('握拳：聚合蛋糕', 1000);
-                aggregateCake();
-            } else if (fingerCount >= 4 && handState !== 'open') {
-                handState = 'open';
-                lastGestureTime = now;
-                showStatus('张开：散开星云', 1000);
-                scatterCake();
-            } else if (fingerCount >= 2 && fingerCount <= 3 && handState !== 'pinch') {
-                handState = 'pinch';
-                lastGestureTime = now;
-                if (userPhotos.length > 0) {
-                    showStatus('捏合：聚焦照片', 1000);
-                    focusOnPhoto();
-                }
-            }
-        }
-
-        function aggregateCake() {
-            if (!instancedMesh) return;
-
-            instancedMesh.forEach((layer, layerIdx) => {
-                const layerCount = 3;
-                const instancesPerLayer = layer.positions.length / 3;
-
-                for (let i = 0; i < instancesPerLayer; i++) {
-                    const targetLayer = Math.floor(i / (instancesPerLayer / layerCount));
-                    const radius = 100 + targetLayer * 80;
-                    const angle = (Math.PI * 2 * i) / (instancesPerLayer / layerCount);
-                    const height = -150 + targetLayer * 100;
-
-                    const x = Math.cos(angle) * radius;
-                    const y = height;
-                    const z = Math.sin(angle) * radius;
-
-                    layer.targetPositions[i * 3] = x;
-                    layer.targetPositions[i * 3 + 1] = y;
-                    layer.targetPositions[i * 3 + 2] = z;
-                }
-            });
-        }
-
-        function scatterCake() {
-            if (!instancedMesh) return;
-
-            instancedMesh.forEach((layer) => {
-                const instancesPerLayer = layer.positions.length / 3;
-
-                for (let i = 0; i < instancesPerLayer; i++) {
-                    const radius = 400 + Math.random() * 200;
-                    const theta = Math.random() * Math.PI * 2;
-                    const phi = Math.acos(Math.random() * 2 - 1);
-
-                    // 球坐标转笛卡尔坐标
-                    layer.targetPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-                    layer.targetPositions[i * 3 + 1] = radius * Math.cos(phi);
-                    layer.targetPositions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
-                }
-            });
-        }
-
-        function focusOnPhoto() {
-            if (userPhotos.length === 0) return;
-
-            const photo = userPhotos[0];
-            if (photo.mesh) {
-                if (gsap && typeof gsap.to === 'function') {
-                    gsap.to(camera.position, {
-                        x: photo.mesh.position.x,
-                        y: photo.mesh.position.y,
-                        z: photo.mesh.position.z + 200,
-                        duration: 1,
-                        ease: 'power2.inOut'
-                    });
-                } else {
-                    // 简单动画
-                    const startPos = { ...camera.position };
-                    const targetPos = {
-                        x: photo.mesh.position.x,
-                        y: photo.mesh.position.y,
-                        z: photo.mesh.position.z + 200
-                    };
-                    const duration = 1000;
-                    const startTime = Date.now();
-                    const animate = () => {
-                        const elapsed = Date.now() - startTime;
-                        const progress = Math.min(elapsed / duration, 1);
-
-                        camera.position.x = startPos.x + (targetPos.x - startPos.x) * progress;
-                        camera.position.y = startPos.y + (targetPos.y - startPos.y) * progress;
-                        camera.position.z = startPos.z + (targetPos.z - startPos.z) * progress;
-
-                        if (progress < 1) {
-                            requestAnimationFrame(animate);
-                        }
-                    };
-                    animate();
-                }
-            }
-        }
-
-        // ==================== 照片上传 ====================
-        function initPhotoUpload() {
-            if (DOM.uploadBtn && DOM.fileInput) {
-                DOM.uploadBtn.addEventListener('click', () => {
-                    DOM.fileInput.click();
-                });
-            }
-
-            if (DOM.fileInput) {
-                DOM.fileInput.addEventListener('change', (e) => {
-                    const file = e.target.files[0];
-                    if (file?.type.startsWith('image/')) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            addPhotoToScene(event.target.result);
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                });
-            }
-        }
-
-        function addPhotoToScene(imageSrc) {
-            const loader = new THREE.TextureLoader();
-            loader.load(imageSrc, (texture) => {
-                const photoGeometry = new THREE.PlaneGeometry(100, 100);
-                const photoMaterial = new THREE.MeshPhysicalMaterial({
-                    map: texture,
-                    metalness: 0.8,
-                    roughness: 0.2,
-                    emissive: 0xffd700,
-                    emissiveIntensity: 0.1,
-                });
-
-                const photoMesh = new THREE.Mesh(photoGeometry, photoMaterial);
-                photoMesh.position.set(
-                    (Math.random() - 0.5) * 500,
-                    (Math.random() - 0.5) * 500,
-                    (Math.random() - 0.5) * 500
-                );
-
-                // 添加金色边框
-                const borderGeometry = new THREE.PlaneGeometry(110, 110);
-                const borderMaterial = new THREE.MeshBasicMaterial({
-                    color: 0xffd700,
-                    side: THREE.BackSide,
-                });
-                const border = new THREE.Mesh(borderGeometry, borderMaterial);
-                border.position.z = -1;
-                photoMesh.add(border);
-
-                scene.add(photoMesh);
-                userPhotos.push({ mesh: photoMesh, texture });
-
-                showStatus('照片已添加！', 2000);
-            });
+            // 在渲染顺序上提升，避免被其他发光效果覆盖
+            floatingTextMesh = new THREE.Points(textGeometry, floatMat);
+            floatingTextMesh.renderOrder = 999;
+            floatingTextMesh.position.y = cfg.FLOATING_TEXT_Y;
+            floatingTextMesh.visible = false;
+            scene.add(floatingTextMesh);
         }
 
         // ==================== 动画循环 ====================
         let animationRunning = false;
+        let _lastFrameTime = performance.now();
         function animate() {
+            const _now = performance.now();
+            const _dt = Math.min(0.1, (_now - _lastFrameTime) / 1000);
+            _lastFrameTime = _now;
+
             if (!animationRunning) {
                 animationRunning = true;
                 console.log('动画循环已启动');
@@ -2093,44 +1774,36 @@
                 particleSystem.geometry.attributes.position.needsUpdate = true;
             }
 
-            if (currentPhase === 'main' && instancedMesh) {
+            if (currentPhase === 'main' && cakePoints && cakePositionAttribute && cakeTargetPositions) {
+                const positionsArray = cakePositionAttribute.array;
                 const cfg = CONFIG.ANIMATION;
-                instancedMesh.forEach((layer) => {
-                    const instancesPerLayer = layer.positions.length / 3;
-                    const matrix = new THREE.Matrix4();
-
-                    for (let i = 0; i < instancesPerLayer; i++) {
-                        const idx = i * 3;
-                        const targetX = layer.targetPositions[idx];
-                        const targetY = layer.targetPositions[idx + 1];
-                        const targetZ = layer.targetPositions[idx + 2];
-
-                        layer.positions[idx] += (targetX - layer.positions[idx]) * cfg.CAKE_LERP;
-                        layer.positions[idx + 1] += (targetY - layer.positions[idx + 1]) * cfg.CAKE_LERP;
-                        layer.positions[idx + 2] += (targetZ - layer.positions[idx + 2]) * cfg.CAKE_LERP;
-
-                        matrix.setPosition(
-                            layer.positions[idx],
-                            layer.positions[idx + 1],
-                            layer.positions[idx + 2]
-                        );
-                        matrix.scale(1 + Math.random() * 0.5);
-                        layer.mesh.setMatrixAt(i, matrix);
-                    }
-
-                    layer.mesh.instanceMatrix.needsUpdate = true;
-                });
-
-                if (handState === 'open' && handCenter) {
-                    const targetRotationY = sceneRotation.y + handCenter.x * cfg.HAND_ROTATION_SENSITIVITY;
-                    const targetRotationX = sceneRotation.x + handCenter.y * cfg.HAND_ROTATION_SENSITIVITY;
-
-                    sceneRotation.y += (targetRotationY - sceneRotation.y) * cfg.HAND_ROTATION_SMOOTH;
-                    sceneRotation.x += (targetRotationX - sceneRotation.x) * cfg.HAND_ROTATION_SMOOTH;
+                for (let i = 0; i < cakePointCount; i++) {
+                    const idx = i * 3;
+                    positionsArray[idx] += (cakeTargetPositions[idx] - positionsArray[idx]) * cfg.CAKE_LERP;
+                    positionsArray[idx + 1] += (cakeTargetPositions[idx + 1] - positionsArray[idx + 1]) * cfg.CAKE_LERP;
+                    positionsArray[idx + 2] += (cakeTargetPositions[idx + 2] - positionsArray[idx + 2]) * cfg.CAKE_LERP;
                 }
+                cakePositionAttribute.needsUpdate = true;
+
 
                 scene.rotation.x = sceneRotation.x;
                 scene.rotation.y = sceneRotation.y;
+
+                // 如果启用了自动旋转，则让 cakeGroup 绕 Y 轴持续旋转（单位：弧度/秒）
+                if (cakeAutoRotate && cakeGroup) {
+                    cakeGroup.rotation.y += CONFIG.CAKE.ROTATION_SPEED * _dt;
+                }
+                // 火苗始终看向镜头
+                if (cakeCandleGroup?.userData?.flame) {
+                    cakeCandleGroup.userData.flame.lookAt(camera.position);
+
+                    // 火焰跳动
+                    const f = cakeCandleGroup.userData.flame;
+                    const t = _now * 0.01;
+                    const bounce = 0.8 + Math.sin(t * 7) * 0.15 + Math.sin(t * 13) * 0.05;
+                    f.scale.set(24 * bounce, 48 * bounce, 1);
+                    f.material.opacity = 0.9 + Math.sin(t * 9) * 0.1;
+                }
             }
 
             // 渲染场景
@@ -2174,7 +1847,6 @@
 
                 animate();
                 initScene();
-                initPhotoUpload();
 
                 await new Promise(resolve => setTimeout(resolve, 300));
 
@@ -2254,26 +1926,9 @@
                     }
 
                     await startIntroSequence();
-
-                    if (Hands && Camera) {
-                        try {
-                            await initHandTracking();
-                        } catch (handError) {
-                            console.warn('手势识别初始化失败:', handError);
-                            showStatus('手势识别未启用，其他功能正常', 3000);
-                        }
-                    } else {
-                        console.warn('MediaPipe 未加载，跳过手势识别');
-                        showStatus('手势识别不可用（MediaPipe 未加载）', 3000);
-                    }
                 });
             }
 
-            if (DOM.startUploadBtn && DOM.fileInput) {
-                DOM.startUploadBtn.addEventListener('click', () => {
-                    DOM.fileInput.click();
-                });
-            }
         }
 
         // 立即启动（模块导入完成后）
@@ -2286,3 +1941,5 @@
 </body>
 
 </html>
+
+    
