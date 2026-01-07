@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gemini Cake - 2026 Interactive Experience</title>
+    <style>
+        /* AIGC START */
+        :root {
+            --gold: #FFD700;
+            --gold-dim: #AA8800;
+            --glass-bg: rgba(20, 20, 20, 0.6);
+            --glass-border: rgba(255, 215, 0, 0.3);
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--gold);
+        }
+
+        #webgl {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none; /* 让鼠标事件穿透到 Canvas */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Loading Screen */
+        #loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 1s ease-out;
+        }
+
+        .loader-text {
+            font-size: 24px;
+            letter-spacing: 4px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: shine 2s linear infinite;
+        }
+
+        .progress-bar {
+            width: 300px;
+            height: 2px;
+            background: #333;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--gold);
+            width: 0%;
+            transition: width 0.2s;
+            box-shadow: 0 0 10px var(--gold);
+        }
+
+        @keyframes shine {
+            0% { background-position: 0% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* Camera Preview */
+        #camera-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            overflow: hidden;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            transform-origin: bottom right;
+            transition: transform 0.3s;
+        }
+
+        #camera-container:hover {
+            transform: scale(1.1);
+        }
+
+        #input-video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.5;
+            transform: scaleX(-1); /* 镜像 */
+        }
+
+        #output-canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* 镜像 */
+        }
+
+        /* Controls */
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            pointer-events: auto;
+            display: flex;
+            gap: 15px;
+        }
+
+        .glass-btn {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--gold);
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: inherit;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .glass-btn:hover {
+            background: rgba(255, 215, 0, 0.2);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        /* HUD */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 14px;
+            line-height: 1.5;
+            text-shadow: 0 0 5px rgba(0,0,0,0.8);
+            opacity: 0.8;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: red;
+            margin-right: 5px;
+            box-shadow: 0 0 5px red;
+        }
+
+        .status-dot.active {
+            background: #00ff00;
+            box-shadow: 0 0 5px #00ff00;
+        }
+
+        /* Instructions */
+        #instructions {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            text-align: right;
+            max-width: 300px;
+            pointer-events: none;
+        }
+
+        .key-instruction {
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #ddd;
+        }
+
+        .highlight {
+            color: var(--gold);
+            font-weight: bold;
+        }
+        /* AIGC END */
+    </style>
+    
+    <!-- Import Maps -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/+esm"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <!-- AIGC START -->
+    <!-- Canvas -->
+    <canvas id="webgl"></canvas>
+
+    <!-- UI Layer -->
+    <div id="ui-layer">
+        <!-- Loading -->
+        <div id="loading-screen">
+            <div class="loader-text">Loading Experience</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div id="loading-details" style="margin-top: 10px; font-size: 12px; color: #666;">Initializing...</div>
+        </div>
+
+        <!-- HUD -->
+        <div id="hud" style="display: none;">
+            <div>FPS: <span id="fps-counter">0</span></div>
+            <div><span class="status-dot" id="cam-status"></span>Camera: <span id="cam-state">Off</span></div>
+            <div>Gesture: <span id="gesture-state" class="highlight">None</span></div>
+        </div>
+
+        <!-- Instructions -->
+        <div id="instructions" style="display: none;">
+            <div class="key-instruction">✊ <span class="highlight">握拳 (Fist)</span> - 聚合蛋糕</div>
+            <div class="key-instruction">🖐 <span class="highlight">张开 (Open)</span> - 散开星云</div>
+            <div class="key-instruction">🤏 <span class="highlight">捏合 (Pinch)</span> - 查看照片</div>
+            <div class="key-instruction">👋 <span class="highlight">移动 (Move)</span> - 旋转场景</div>
+        </div>
+
+        <!-- Camera Preview -->
+        <div id="camera-container" style="display: none;">
+            <video id="input-video" autoplay playsinline></video>
+            <canvas id="output-canvas"></canvas>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div id="controls" style="display: none;">
+            <button class="glass-btn" id="start-btn">Start Experience</button>
+            <button class="glass-btn" id="upload-btn" style="display: none;">
+                <span>📷</span> Upload Photo
+            </button>
+            <input type="file" id="file-input" accept="image/*">
+        </div>
+    </div>
+    <!-- AIGC END -->
+
+    <!-- Main Logic -->
+    <script type="module">
+        // AIGC START
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import TWEEN from 'three/addons/libs/tween.module.js';
+        import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+
+        // --- Config & State ---
+        const CONFIG = {
+            colors: [0xFFD700, 0xC0C0C0, 0xE0115F, 0x50C878], // Gold, Silver, Ruby, Emerald
+            particleCount: 5000, // Reduced for compatibility, logic handles more via Instancing
+            bloomParams: { threshold: 0, strength: 1.5, radius: 0.5 },
+            cameraPos: { x: 0, y: 5, z: 20 },
+            cakeLayers: [
+                { r: 5, h: 2, y: 1 },
+                { r: 3.5, h: 1.5, y: 2.75 },
+                { r: 2, h: 1.2, y: 4.1 }
+            ]
+        };
+
+        const STATE = {
+            stage: 'loading', // loading, intro, warp, transition, main
+            gesture: 'None',
+            isExploded: false,
+            pinchFocus: false,
+            handPos: new THREE.Vector2(),
+            rotationSpeed: 0,
+            uploadedTextures: []
+        };
+
+        // --- Globals ---
+        let scene, camera, renderer, composer, controls;
+        let font;
+        let introParticles; // Points for countdown
+        let cakeMeshes = []; // Array of InstancedMesh
+        let cakeDummy = new THREE.Object3D();
+        let fireworkSystems = [];
+        let handLandmarker;
+        let video, canvasCtx;
+        let uploadedPhotoMesh;
+        
+        // --- Initialization ---
+        async function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050505);
+            scene.fog = new THREE.FogExp2(0x050505, 0.02);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 20);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#webgl'), antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ReinhardToneMapping;
+
+            // Post-processing
+            const renderScene = new RenderPass(scene, camera);
+            const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+            bloomPass.threshold = CONFIG.bloomParams.threshold;
+            bloomPass.strength = CONFIG.bloomParams.strength;
+            bloomPass.radius = CONFIG.bloomParams.radius;
+
+            composer = new EffectComposer(renderer);
+            composer.addPass(renderScene);
+            composer.addPass(bloomPass);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.autoRotate = false;
+            controls.enableZoom = true;
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffd700, 2);
+            dirLight.position.set(10, 10, 10);
+            scene.add(dirLight);
+            
+            // Events
+            window.addEventListener('resize', onWindowResize);
+            document.getElementById('start-btn').addEventListener('click', startExperience);
+            document.getElementById('upload-btn').addEventListener('click', () => document.getElementById('file-input').click());
+            document.getElementById('file-input').addEventListener('change', handleFileUpload);
+
+            // Load Resources
+            updateLoading(10, "Loading Fonts...");
+            await loadFont();
+            updateLoading(40, "Initializing AI Vision...");
+            await setupMediaPipe();
+            updateLoading(80, "Generating Geometry...");
+            
+            // Ready
+            updateLoading(100, "Ready");
+            document.getElementById('loading-screen').style.opacity = 0;
+            setTimeout(() => {
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('controls').style.display = 'flex';
+                document.getElementById('instructions').style.display = 'block';
+                document.getElementById('hud').style.display = 'block';
+            }, 1000);
+
+            animate();
+        }
+
+        async function loadFont() {
+            const loader = new FontLoader();
+            return new Promise(resolve => {
+                loader.load('https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_bold.typeface.json', (response) => {
+                    font = response;
+                    resolve();
+                });
+            });
+        }
+
+        // --- MediaPipe Setup ---
+        async function setupMediaPipe() {
+            try {
+                const vision = await FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm"
+                );
+                handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+                        delegate: "GPU"
+                    },
+                    runningMode: "VIDEO",
+                    numHands: 1
+                });
+                
+                video = document.getElementById('input-video');
+                const canvas = document.getElementById('output-canvas');
+                canvasCtx = canvas.getContext('2d');
+                
+                // Initialize Camera
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+                        video.srcObject = stream;
+                        video.addEventListener("loadeddata", predictWebcam);
+                        document.getElementById('camera-container').style.display = 'block';
+                        document.getElementById('cam-state').textContent = "On";
+                        document.getElementById('cam-status').classList.add('active');
+                    });
+                }
+            } catch (e) {
+                console.error("MediaPipe Init Error:", e);
+                document.getElementById('loading-details').textContent = "Camera Init Failed (Check Permissions)";
+            }
+        }
+
+        let lastVideoTime = -1;
+        async function predictWebcam() {
+            if (video.currentTime !== lastVideoTime) {
+                lastVideoTime = video.currentTime;
+                const startTimeMs = performance.now();
+                
+                if (handLandmarker) {
+                    const result = handLandmarker.detectForVideo(video, startTimeMs);
+                    drawHand(result);
+                    processGesture(result);
+                }
+            }
+            requestAnimationFrame(predictWebcam);
+        }
+
+        function drawHand(result) {
+            const canvas = document.getElementById('output-canvas');
+            if (!canvas) return;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (result.landmarks) {
+                for (const landmarks of result.landmarks) {
+                    // Draw connections
+                    drawConnectors(canvasCtx, landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "#FFD700", lineWidth: 2 });
+                    // Draw landmarks
+                    for (const landmark of landmarks) {
+                        canvasCtx.beginPath();
+                        canvasCtx.arc(landmark.x * canvas.width, landmark.y * canvas.height, 4, 0, 2 * Math.PI);
+                        canvasCtx.fillStyle = "#FF0000";
+                        canvasCtx.fill();
+                    }
+                }
+            }
+        }
+        
+        // Simple manual connector drawing to avoid extra dependency
+        function drawConnectors(ctx, landmarks, connections, style) {
+            ctx.strokeStyle = style.color;
+            ctx.lineWidth = style.lineWidth;
+            for (const connection of connections) {
+                const start = landmarks[connection.start];
+                const end = landmarks[connection.end];
+                ctx.beginPath();
+                ctx.moveTo(start.x * ctx.canvas.width, start.y * ctx.canvas.height);
+                ctx.lineTo(end.x * ctx.canvas.width, end.y * ctx.canvas.height);
+                ctx.stroke();
+            }
+        }
+
+        function processGesture(result) {
+            if (!result.landmarks || result.landmarks.length === 0) {
+                STATE.gesture = 'None';
+                STATE.handPos.set(0, 0);
+                updateGestureUI();
+                return;
+            }
+
+            const landmarks = result.landmarks[0];
+            const thumbTip = landmarks[4];
+            const indexTip = landmarks[8];
+            const middleTip = landmarks[12];
+            const ringTip = landmarks[16];
+            const pinkyTip = landmarks[20];
+            const wrist = landmarks[0];
+
+            // Calculate distance of tips to wrist (simplified check for open vs closed)
+            const tips = [indexTip, middleTip, ringTip, pinkyTip];
+            const avgDist = tips.reduce((acc, tip) => {
+                return acc + Math.sqrt(Math.pow(tip.x - wrist.x, 2) + Math.pow(tip.y - wrist.y, 2));
+            }, 0) / 4;
+
+            // Pinch detection (Index and Thumb close)
+            const pinchDist = Math.sqrt(Math.pow(thumbTip.x - indexTip.x, 2) + Math.pow(thumbTip.y - indexTip.y, 2));
+
+            // Hand Position (for rotation) normalized -1 to 1
+            STATE.handPos.x = (landmarks[9].x - 0.5) * 2; 
+            STATE.handPos.y = (landmarks[9].y - 0.5) * 2;
+
+            if (pinchDist < 0.05) {
+                STATE.gesture = 'Pinch';
+                STATE.pinchFocus = true;
+            } else if (avgDist < 0.2) { // Threshold might need tuning
+                STATE.gesture = 'Fist';
+                STATE.isExploded = false;
+                STATE.pinchFocus = false;
+            } else {
+                STATE.gesture = 'Open';
+                STATE.isExploded = true;
+                STATE.pinchFocus = false;
+            }
+            
+            updateGestureUI();
+        }
+
+        function updateGestureUI() {
+            const el = document.getElementById('gesture-state');
+            el.textContent = STATE.gesture;
+            el.style.color = STATE.gesture === 'None' ? '#666' : 'var(--gold)';
+        }
+
+        // --- Logic: Intro (Countdown) ---
+        function startExperience() {
+            document.getElementById('start-btn').style.display = 'none';
+            STATE.stage = 'intro';
+            playCountdown();
+        }
+
+        function playCountdown() {
+            const sequence = ['5', '4', '3', '2', '1', '2026'];
+            let index = 0;
+
+            function showNext() {
+                if (index >= sequence.length) {
+                    startWarp();
+                    return;
+                }
+                
+                const text = sequence[index];
+                morphToText(text);
+                
+                const duration = text === '2026' ? 2000 : 1000;
+                setTimeout(() => {
+                    index++;
+                    showNext();
+                }, duration);
+            }
+            
+            // Create particle system for text
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(CONFIG.particleCount * 3);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: CONFIG.colors[0],
+                size: 0.2,
+                sizeAttenuation: true,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            
+            introParticles = new THREE.Points(geometry, material);
+            scene.add(introParticles);
+
+            showNext();
+        }
+
+        function morphToText(text) {
+            const textGeo = new TextGeometry(text, {
+                font: font,
+                size: text === '2026' ? 3 : 5,
+                height: 0.5,
+                curveSegments: 12,
+                bevelEnabled: true,
+                bevelThickness: 0.1,
+                bevelSize: 0.05,
+                bevelSegments: 5
+            });
+
+            textGeo.center();
+            const sampler = new THREE.MeshSurfaceSampler(new THREE.Mesh(textGeo, new THREE.MeshBasicMaterial()));
+            sampler.build();
+
+            const posAttribute = introParticles.geometry.attributes.position;
+            const tempVec = new THREE.Vector3();
+
+            // Tween particles to new positions
+            for (let i = 0; i < CONFIG.particleCount; i++) {
+                sampler.sample(tempVec);
+                
+                // Animate each particle
+                new TWEEN.Tween({
+                    x: posAttribute.getX(i),
+                    y: posAttribute.getY(i),
+                    z: posAttribute.getZ(i)
+                })
+                .to({ x: tempVec.x, y: tempVec.y, z: tempVec.z }, 800)
+                .easing(TWEEN.Easing.Exponential.InOut)
+                .onUpdate((obj) => {
+                    posAttribute.setXYZ(i, obj.x, obj.y, obj.z);
+                })
+                .delay(Math.random() * 200) // Stagger
+                .start();
+            }
+            
+            // Trigger update in loop
+            new TWEEN.Tween({ val: 0 }).to({ val: 1 }, 1000).onUpdate(() => {
+                posAttribute.needsUpdate = true;
+            }).start();
+        }
+
+        // --- Logic: Warp & Firework ---
+        function startWarp() {
+            STATE.stage = 'warp';
+            
+            // Camera Zoom Out then In
+            new TWEEN.Tween(camera.position)
+                .to({ z: 100 }, 1000)
+                .easing(TWEEN.Easing.Back.In)
+                .chain(
+                    new TWEEN.Tween(camera.position)
+                    .to({ z: -50 }, 500) // Fly through
+                    .easing(TWEEN.Easing.Quadratic.Out)
+                    .onComplete(() => {
+                         scene.remove(introParticles);
+                         camera.position.set(0, 5, 40); // Reset for main scene
+                         startFireworks();
+                    })
+                )
+                .start();
+
+            // Stretch particles (Simulated by scaling mesh z)
+            new TWEEN.Tween(introParticles.scale)
+                .to({ z: 20 }, 1000)
+                .start();
+        }
+
+        function startFireworks() {
+            STATE.stage = 'transition';
+            
+            // Launch 5 fireworks
+            for(let i=0; i<5; i++) {
+                setTimeout(() => launchFirework(), i * 400);
+            }
+            
+            setTimeout(() => {
+                initMainScene();
+            }, 3000);
+        }
+
+        function launchFirework() {
+            const fw = {
+                particles: [],
+                mesh: null,
+                alive: true
+            };
+            
+            // Geometry
+            const geometry = new THREE.BufferGeometry();
+            const count = 500;
+            const positions = new Float32Array(count * 3);
+            const velocities = [];
+            
+            const startX = (Math.random() - 0.5) * 20;
+            const startY = -10;
+            const color = new THREE.Color(CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)]);
+
+            for(let i=0; i<count; i++) {
+                positions[i*3] = startX;
+                positions[i*3+1] = startY;
+                positions[i*3+2] = (Math.random() - 0.5) * 10;
+                
+                // Random explosion velocity
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                const speed = 0.2 + Math.random() * 0.3;
+                velocities.push({
+                    x: speed * Math.sin(phi) * Math.cos(theta),
+                    y: speed * Math.sin(phi) * Math.sin(theta) + 0.5, // Initial Upward bias
+                    z: speed * Math.cos(phi)
+                });
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            fw.mesh = new THREE.Points(geometry, new THREE.PointsMaterial({
+                color: color,
+                size: 0.3,
+                transparent: true
+            }));
+            
+            scene.add(fw.mesh);
+            
+            // Animate Firework
+            const startTime = Date.now();
+            const animateFW = () => {
+                if (!fw.alive) return;
+                
+                const elapsed = (Date.now() - startTime) / 1000;
+                const positions = fw.mesh.geometry.attributes.position.array;
+                
+                for(let i=0; i<count; i++) {
+                    // Physics
+                    velocities[i].y -= 0.01; // Gravity
+                    velocities[i].x *= 0.98; // Drag
+                    velocities[i].y *= 0.98;
+                    velocities[i].z *= 0.98;
+                    
+                    if (elapsed > 1.0) { // Explode phase
+                         positions[i*3] += velocities[i].x;
+                         positions[i*3+1] += velocities[i].y;
+                         positions[i*3+2] += velocities[i].z;
+                    } else { // Rise phase
+                         positions[i*3+1] += 0.3; // Rise speed
+                    }
+                }
+                
+                fw.mesh.geometry.attributes.position.needsUpdate = true;
+                fw.mesh.material.opacity -= 0.01;
+                
+                if (fw.mesh.material.opacity <= 0) {
+                    fw.alive = false;
+                    scene.remove(fw.mesh);
+                } else {
+                    requestAnimationFrame(animateFW);
+                }
+            };
+            animateFW();
+        }
+
+        // --- Logic: Main Scene (Cake) ---
+        function initMainScene() {
+            STATE.stage = 'main';
+            document.getElementById('upload-btn').style.display = 'flex';
+            
+            // 1. Text Top
+            const textGeo = new TextGeometry('2026祝你开心', {
+                font: font,
+                size: 1.5,
+                height: 0.2,
+            });
+            textGeo.center();
+            const textMesh = new THREE.Mesh(textGeo, new THREE.MeshStandardMaterial({
+                color: 0xFFD700, emissive: 0x553300, metalness: 0.8, roughness: 0.2
+            }));
+            textMesh.position.y = 7;
+            scene.add(textMesh);
+
+            // 2. Instanced Mesh for Cake
+            // Create 3 InstancedMeshes for different shapes
+            const shapes = [
+                new THREE.SphereGeometry(0.1, 8, 8),
+                new THREE.CylinderGeometry(0.05, 0.05, 0.2, 6),
+                new THREE.ConeGeometry(0.1, 0.2, 8)
+            ];
+            
+            cakeMeshes = []; // Global array
+            const countPerShape = 1500;
+            
+            const material = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff, // will be colored by instance color
+                metalness: 0.9,
+                roughness: 0.1,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.1
+            });
+
+            const dummy = new THREE.Object3D();
+            const color = new THREE.Color();
+
+            shapes.forEach(geometry => {
+                const mesh = new THREE.InstancedMesh(geometry, material, countPerShape);
+                mesh.userData = {
+                    cakePos: [],
+                    nebulaPos: [],
+                    velocities: []
+                };
+
+                for (let i = 0; i < countPerShape; i++) {
+                    // Determine Layer
+                    const layerIdx = Math.floor(Math.random() * 3);
+                    const layer = CONFIG.cakeLayers[layerIdx];
+                    
+                    // CAKE POSITION (Cylindrical Surface)
+                    const theta = Math.random() * Math.PI * 2;
+                    const h = (Math.random() - 0.5) * layer.h;
+                    const r = layer.r + (Math.random() - 0.5) * 0.5; // Thickness
+                    
+                    const x = r * Math.cos(theta);
+                    const y = layer.y + h;
+                    const z = r * Math.sin(theta);
+                    
+                    mesh.userData.cakePos.push(new THREE.Vector3(x, y, z));
+                    
+                    // NEBULA POSITION (Random Sphere)
+                    const nr = 10 + Math.random() * 10;
+                    const nTheta = Math.random() * Math.PI * 2;
+                    const nPhi = Math.acos(2 * Math.random() - 1);
+                    
+                    const nx = nr * Math.sin(nPhi) * Math.cos(nTheta);
+                    const ny = nr * Math.sin(nPhi) * Math.sin(nTheta);
+                    const nz = nr * Math.cos(nPhi);
+                    
+                    mesh.userData.nebulaPos.push(new THREE.Vector3(nx, ny, nz));
+                    
+                    // Current (Start at Nebula for transition in)
+                    dummy.position.set(nx, ny, nz);
+                    dummy.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
+                    dummy.updateMatrix();
+                    mesh.setMatrixAt(i, dummy.matrix);
+                    
+                    // Color
+                    color.setHex(CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)]);
+                    mesh.setColorAt(i, color);
+                }
+                
+                scene.add(mesh);
+                cakeMeshes.push(mesh);
+            });
+            
+            // Initial Animation: Nebula -> Cake
+            STATE.isExploded = false; 
+            
+            // Ambient Dust
+            addAmbientDust();
+        }
+
+        function addAmbientDust() {
+            const geom = new THREE.BufferGeometry();
+            const pos = [];
+            for(let i=0; i<1000; i++) {
+                pos.push((Math.random()-0.5)*40, (Math.random()-0.5)*40, (Math.random()-0.5)*40);
+            }
+            geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            const mat = new THREE.PointsMaterial({ color: 0xFFD700, size: 0.05, opacity: 0.6, transparent: true });
+            const dust = new THREE.Points(geom, mat);
+            scene.add(dust);
+        }
+
+        // --- Logic: User Content ---
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = function() {
+                    const texture = new THREE.Texture(img);
+                    texture.needsUpdate = true;
+                    createPhotoMesh(texture);
+                }
+            }
+            reader.readAsDataURL(file);
+        }
+
+        function createPhotoMesh(texture) {
+            const geometry = new THREE.PlaneGeometry(3, 3);
+            const material = new THREE.MeshBasicMaterial({ 
+                map: texture, 
+                side: THREE.DoubleSide 
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            
+            // Add Border
+            const borderGeo = new THREE.EdgesGeometry(geometry);
+            const borderMat = new THREE.LineBasicMaterial({ color: 0xFFD700, linewidth: 2 });
+            const border = new THREE.LineSegments(borderGeo, borderMat);
+            mesh.add(border);
+
+            // Random Position in Nebula
+            mesh.position.set((Math.random()-0.5)*10, Math.random()*5, (Math.random()-0.5)*10);
+            scene.add(mesh);
+            uploadedPhotoMesh = mesh; // Keep track of last one for Focus
+        }
+
+        // --- Main Loop ---
+        function updateMainScene() {
+            if (cakeMeshes.length === 0) return;
+            
+            const dummy = new THREE.Object3D();
+            const targetKey = STATE.isExploded ? 'nebulaPos' : 'cakePos';
+            const lerpFactor = 0.05;
+
+            // Rotation Logic from Hand
+            if (STATE.isExploded && STATE.gesture !== 'None') {
+                scene.rotation.y += STATE.handPos.x * 0.05;
+                scene.rotation.x += STATE.handPos.y * 0.05;
+            } else {
+                scene.rotation.y += 0.002; // Auto rotate slow
+            }
+
+            // Pinch Focus Logic
+            if (STATE.pinchFocus && uploadedPhotoMesh) {
+               // Move camera towards photo
+               const targetPos = uploadedPhotoMesh.position.clone().add(new THREE.Vector3(0, 0, 5));
+               camera.position.lerp(targetPos, 0.05);
+               camera.lookAt(uploadedPhotoMesh.position);
+            } else if (STATE.stage === 'main') {
+                // Default Camera float
+            }
+
+            // Instance Update for all meshes
+            cakeMeshes.forEach(mesh => {
+                const count = mesh.count;
+                for (let i = 0; i < count; i++) {
+                    const target = mesh.userData[targetKey][i];
+                    
+                    // Get current matrix
+                    mesh.getMatrixAt(i, dummy.matrix);
+                    dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
+                    
+                    // Lerp Position
+                    dummy.position.lerp(target, lerpFactor);
+                    
+                    // Rotate based on state
+                    if (STATE.isExploded) {
+                         dummy.rotation.x += 0.01;
+                         dummy.rotation.y += 0.01;
+                    } else {
+                         dummy.rotation.set(0,0,0); // Align for cake
+                    }
+                    
+                    dummy.updateMatrix();
+                    mesh.setMatrixAt(i, dummy.matrix);
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const time = Date.now() * 0.001;
+            
+            TWEEN.update();
+            
+            if (STATE.stage === 'main') {
+                updateMainScene();
+            }
+            
+            controls.update();
+            composer.render();
+            
+            // FPS Counter (approx)
+            const now = performance.now();
+            if (Math.random() > 0.95 && lastFrameTime > 0) {
+                const delta = now - lastFrameTime;
+                if (delta > 0) {
+                     document.getElementById('fps-counter').innerText = Math.round(1000 / delta);
+                }
+            }
+            lastFrameTime = now;
+        }
+        
+        let lastFrameTime = 0;
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function updateLoading(percent, text) {
+            document.getElementById('progress-fill').style.width = percent + '%';
+            if(text) document.getElementById('loading-details').innerText = text;
+        }
+
+        // Boot
+        init();
+        // AIGC END
+    </script>
+</body>
+</html>
